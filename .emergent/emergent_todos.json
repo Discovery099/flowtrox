@@ -28,7 +28,11 @@
     "status": "completed"
   },
   {
-    "content": "Phase 2: End-to-end testing via testing_agent_v3 (backend + frontend)",
-    "status": "in_progress"
+    "content": "Phase 2: End-to-end testing via testing_agent_v3 (21/21 passed)",
+    "status": "completed"
+  },
+  {
+    "content": "Phase 3: Add README for multi-instrument extension",
+    "status": "completed"
   }
 ]
