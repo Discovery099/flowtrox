@@ -146,6 +146,24 @@ async def download_run(run_id: str, kind: str):
 
 app.include_router(api_router)
 
+
+@app.on_event("startup")
+async def _warm_default_models():
+    """Pre-warm the default instrument (ES) for both regime models in the
+    background so the first user backtest is instant (avoids cold-start gateway
+    timeouts). Non-blocking; failures are logged and ignored."""
+    def _warm():
+        for rm in ("gmm", "hmm"):
+            try:
+                svc.ensure_models("ES", rm)
+                logger.info("Pre-warmed ES:%s", rm)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Pre-warm ES:%s failed: %s", rm, exc)
+    try:
+        svc._EXECUTOR.submit(_warm)
+    except Exception:  # noqa: BLE001
+        pass
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
