@@ -5,14 +5,14 @@
   },
   {
     "content": "Run comprehensive testing agent (backend + frontend), confirm cold-start test passes",
-    "status": "in_progress"
+    "status": "completed"
   },
   {
     "content": "Fix any bugs surfaced by testing agent",
-    "status": "pending"
+    "status": "completed"
   },
   {
     "content": "Update plan.md to mark P0 phase COMPLETED",
-    "status": "pending"
+    "status": "completed"
   }
 ]

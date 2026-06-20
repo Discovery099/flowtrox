@@ -21,7 +21,7 @@
 - Architect for **multi-instrument** extension later:
   - instrument registry (csv path + contract specs) so additional futures CSVs can be added with minimal changes.
 
-**Current status**: Phase 1 and Phase 2 are complete (engine + backend + frontend verified). Remaining work is full end-to-end automated testing and final polish.
+**Current status**: Phases 1, 2 complete. P0 cold-start (502 timeout) fix COMPLETE & verified — ES models pre-warm in a non-blocking background thread on FastAPI startup; comprehensive testing passed (backend 9/9, frontend 15/15, integration 100%, no timeouts). Remaining work is optional Phase 3 hardening + future tasks (CSV upload UI, portfolio layer, live bridge).
 
 ---
 
@@ -103,9 +103,8 @@
 
 **Work items (updated)**
 - ✅ Multi-instrument architecture scaffold exists (`INSTRUMENTS` registry); finalize docs for adding new futures.
-- 🔜 Run comprehensive automated tests via `testing_agent_v3`:
-  - Backend: endpoint contracts, long-job polling, artifact downloads.
-  - Frontend: run single, switch tabs, verify charts render, verify downloads.
+- ✅ P0 cold-start fix: pre-warm default ES (gmm+hmm) in background thread on startup (server.py `on_event("startup")` → `svc._EXECUTOR.submit`). Verified non-blocking; no 502s.
+- ✅ Comprehensive automated tests via `testing_agent_v3` (iteration_5.json): backend 9/9, frontend 15/15, integration 100% — all passed, zero bugs.
 - 🔜 Add/confirm pytest suite for core invariants:
   - posteriors sum to 1; signal domain in {-1,0,1}; no pyramiding; no NaNs; trade log schema.
 - 🔜 Robustness improvements (optional):
