@@ -154,6 +154,36 @@ export const RunPanel = ({
 
         <div className="rounded-md border border-[hsl(var(--hairline))] bg-[hsl(var(--surface-0))] px-3 py-2">
           <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            Regime Model
+          </Label>
+          <div className="mt-2 grid grid-cols-2 gap-1">
+            {[
+              { k: "hmm", t: "HMM" },
+              { k: "gmm", t: "GMM" },
+            ].map((o) => (
+              <button
+                key={o.k}
+                data-testid={`run-panel-regime-${o.k}`}
+                disabled={busy}
+                onClick={() => set("regime_model", o.k)}
+                className={`rounded px-2 py-1 font-mono text-[11px] transition-colors ${
+                  (params.regime_model || "gmm") === o.k
+                    ? "bg-[hsl(var(--info)/0.15)] text-[hsl(var(--info))] ring-1 ring-[hsl(var(--info)/0.4)]"
+                    : "text-muted-foreground hover:bg-[hsl(var(--muted))]"
+                }`}
+              >
+                {o.t}
+              </button>
+            ))}
+          </div>
+          <p className="mt-1.5 text-[10px] leading-snug text-muted-foreground">
+            HMM = real Hidden Markov Model (filtered, no look-ahead). GMM = the
+            spec's independent-mixture proxy.
+          </p>
+        </div>
+
+        <div className="rounded-md border border-[hsl(var(--hairline))] bg-[hsl(var(--surface-0))] px-3 py-2">
+          <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
             Drawdown Method
           </Label>
           <div className="mt-2 grid grid-cols-2 gap-1">

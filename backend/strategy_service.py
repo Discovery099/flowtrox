@@ -104,17 +104,34 @@ def strategy_info() -> dict:
 # ---------------------------------------------------------------------------
 # Model caching
 # ---------------------------------------------------------------------------
-def ensure_models(symbol: str) -> dict:
-    """Fit (once) and cache train models + engineered test features."""
+def _gmm_weights_or_none(model):
+    """Mixture weights for GMM; for an HMM return stationary-ish state weights."""
+    if hasattr(model, "weights_"):
+        return [float(w) for w in model.weights_]
+    # GaussianHMM: use stationary distribution of the transition matrix.
+    try:
+        A = np.asarray(model.transmat_)
+        vals, vecs = np.linalg.eig(A.T)
+        idx = int(np.argmin(np.abs(vals - 1.0)))
+        pi = np.real(vecs[:, idx])
+        pi = pi / pi.sum()
+        return [float(x) for x in pi]
+    except Exception:  # noqa: BLE001
+        return [float(x) for x in np.asarray(model.startprob_)]
+
+
+def ensure_models(symbol: str, regime_model: str = "gmm") -> dict:
+    """Fit (once) and cache train models + engineered test features per (symbol, regime_model)."""
     symbol = symbol.upper()
     get_instrument(symbol)  # validates symbol
-    lock = _get_lock(symbol)
+    key = f"{symbol}:{regime_model}"
+    lock = _get_lock(key)
     with lock:
-        if symbol in _MODEL_CACHE:
-            return _MODEL_CACHE[symbol]
+        if key in _MODEL_CACHE:
+            return _MODEL_CACHE[key]
 
         train_df, test_df, inst = load_instrument_data(symbol)
-        fitted = _fit_train_models(train_df, hmm_n_init=10)
+        fitted = _fit_train_models(train_df, hmm_n_init=10, regime_model=regime_model)
 
         # Engineer test features once (frozen models).
         from strategy_01_flowtox_regime.features import engineer_features
@@ -123,12 +140,23 @@ def ensure_models(symbol: str) -> dict:
             har_params=fitted["har_params"], hmm_model=fitted["hmm_model"],
             scaler=fitted["scaler"], label_map=fitted["label_map"],
             vol_thresholds=fitted["vol_thresholds"],
+            regime_model=regime_model,
         )
         num_test_days = int(test_df["ts_event"].dt.date.nunique())
 
+        model = fitted["hmm_model"]
+        transition_matrix = None
+        if hasattr(model, "transmat_"):
+            lm = fitted["label_map"]
+            A = np.asarray(model.transmat_)
+            # Reorder rows+cols into semantic-state order for display.
+            transition_matrix = [[float(A[lm[i], lm[j]]) for j in range(len(lm))] for i in range(len(lm))]
+
         model_info = {
+            "regime_model": regime_model,
             "har_params": {k: float(v) for k, v in fitted["har_params"].items()},
-            "gmm_weights": [float(w) for w in fitted["hmm_model"].weights_],
+            "gmm_weights": _gmm_weights_or_none(model),
+            "transition_matrix": transition_matrix,
             "vol_thresholds": {k: float(v) for k, v in fitted["vol_thresholds"].items()},
             "label_map": [int(x) for x in fitted["label_map"]],
             "train_rows": int(len(train_df)),
@@ -145,7 +173,7 @@ def ensure_models(symbol: str) -> dict:
             "instrument_name": inst["name"],
         }
 
-        _MODEL_CACHE[symbol] = {
+        _MODEL_CACHE[key] = {
             "train_df": train_df,
             "test_df": test_df,
             "fitted": fitted,
@@ -153,12 +181,13 @@ def ensure_models(symbol: str) -> dict:
             "num_test_days": num_test_days,
             "model_info": model_info,
             "inst": inst,
+            "regime_model": regime_model,
         }
-        return _MODEL_CACHE[symbol]
+        return _MODEL_CACHE[key]
 
 
-def is_model_ready(symbol: str) -> bool:
-    return symbol.upper() in _MODEL_CACHE
+def is_model_ready(symbol: str, regime_model: str = "gmm") -> bool:
+    return f"{symbol.upper()}:{regime_model}" in _MODEL_CACHE
 
 
 # ---------------------------------------------------------------------------
@@ -298,9 +327,10 @@ def _jsonify_metrics(metrics: dict) -> dict:
 # ---------------------------------------------------------------------------
 # Single backtest
 # ---------------------------------------------------------------------------
-def run_single(symbol: str, params: dict, drawdown_method: str = "anchored") -> dict:
+def run_single(symbol: str, params: dict, drawdown_method: str = "anchored",
+               regime_model: str = "gmm") -> dict:
     """Run a single backtest on the test set with the given params."""
-    cache = ensure_models(symbol)
+    cache = ensure_models(symbol, regime_model=regime_model)
     from strategy_01_flowtox_regime.signal_generator import generate_signals
     from strategy_01_flowtox_regime.backtest import backtest
     from strategy_01_flowtox_regime.metrics import compute_all_metrics, check_acceptance
@@ -330,6 +360,7 @@ def run_single(symbol: str, params: dict, drawdown_method: str = "anchored") -> 
         "run_id": run_id,
         "symbol": symbol.upper(),
         "mode": "single",
+        "regime_model": regime_model,
         "params": params,
         "metrics": _jsonify_metrics(metrics),
         "checks": {k: bool(v) for k, v in checks.items()},
@@ -346,12 +377,14 @@ def run_single(symbol: str, params: dict, drawdown_method: str = "anchored") -> 
 # ---------------------------------------------------------------------------
 # Walk-forward optimization (background job)
 # ---------------------------------------------------------------------------
-def start_optimization(symbol: str, drawdown_method: str = "anchored") -> str:
+def start_optimization(symbol: str, drawdown_method: str = "anchored",
+                       regime_model: str = "gmm") -> str:
     job_id = str(uuid.uuid4())
     _JOBS[job_id] = {
         "job_id": job_id,
         "symbol": symbol.upper(),
         "drawdown_method": drawdown_method,
+        "regime_model": regime_model,
         "status": "queued",
         "pct": 0,
         "events": [{"ts": _now_iso(), "stage": "queued", "message": "Job queued", "pct": 0}],
@@ -382,7 +415,8 @@ def _run_optimization_job(job_id: str) -> None:
     try:
         symbol = job["symbol"]
         results = run_full_pipeline(symbol, progress_cb=progress_cb,
-                                    drawdown_method=job.get("drawdown_method", "anchored"))
+                                    drawdown_method=job.get("drawdown_method", "anchored"),
+                                    regime_model=job.get("regime_model", "gmm"))
 
         metrics = results["metrics"]
         checks = results["checks"]
@@ -396,9 +430,17 @@ def _run_optimization_job(job_id: str) -> None:
         fitted = results["fitted"]
         test_df = results["test_df"]
         train_df = results["train_df"]
+        fmodel = fitted["hmm_model"]
+        ftrans = None
+        if hasattr(fmodel, "transmat_"):
+            lm = fitted["label_map"]
+            A = np.asarray(fmodel.transmat_)
+            ftrans = [[float(A[lm[i], lm[j]]) for j in range(len(lm))] for i in range(len(lm))]
         model_info = {
+            "regime_model": fitted.get("regime_model", "gmm"),
             "har_params": {k: float(v) for k, v in fitted["har_params"].items()},
-            "gmm_weights": [float(w) for w in fitted["hmm_model"].weights_],
+            "gmm_weights": _gmm_weights_or_none(fmodel),
+            "transition_matrix": ftrans,
             "vol_thresholds": {k: float(v) for k, v in fitted["vol_thresholds"].items()},
             "label_map": [int(x) for x in fitted["label_map"]],
             "train_rows": int(len(train_df)),
@@ -420,6 +462,7 @@ def _run_optimization_job(job_id: str) -> None:
             "run_id": run_id,
             "symbol": symbol,
             "mode": "optimize",
+            "regime_model": fitted.get("regime_model", "gmm"),
             "params": best_params,
             "best_params": best_params,
             "walk_forward_sharpe": results["walk_forward"]["best_score"],

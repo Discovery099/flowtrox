@@ -37,12 +37,45 @@ export const ModelInfo = ({ modelInfo, bestParams, walkForward }) => {
       </Card>
 
       <Card className="border-[hsl(var(--hairline))] bg-[hsl(var(--card))] p-4">
-        <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide">GMM Regimes (3-state)</h3>
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="text-sm font-semibold uppercase tracking-wide">Regime Model (3-state)</h3>
+          <span className="rounded border border-[hsl(var(--info)/0.4)] bg-[hsl(var(--info)/0.1)] px-1.5 py-0.5 font-mono text-[10px] uppercase text-[hsl(var(--info))]">
+            {(mi.regime_model || "gmm").toUpperCase()}
+          </span>
+        </div>
         <Row k="normal weight" v={fmtNum(gmm[0], 3)} />
         <Row k="toxic-cont weight" v={fmtNum(gmm[1], 3)} />
         <Row k="toxic-rev weight" v={fmtNum(gmm[2], 3)} />
         <Row k="vol p33 thresh" v={vt.p33?.toExponential(2)} />
         <Row k="vol p67 thresh" v={vt.p67?.toExponential(2)} />
+        {mi.transition_matrix && (
+          <div className="mt-3">
+            <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+              Transition matrix P(t&rarr;t+1)
+            </div>
+            <table className="w-full border-collapse font-mono text-[11px] tabular-nums">
+              <tbody>
+                {mi.transition_matrix.map((row, i) => (
+                  <tr key={i}>
+                    {row.map((cell, j) => (
+                      <td
+                        key={j}
+                        className={`border border-[hsl(var(--hairline))] px-1.5 py-1 text-center ${
+                          i === j ? "text-[hsl(var(--info))]" : "text-muted-foreground"
+                        }`}
+                      >
+                        {fmtNum(cell, 2)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="mt-1 text-[10px] text-muted-foreground">
+              rows/cols: normal, toxic-cont, toxic-rev &middot; diagonal = persistence
+            </div>
+          </div>
+        )}
       </Card>
 
       <Card className="border-[hsl(var(--hairline))] bg-[hsl(var(--card))] p-4">

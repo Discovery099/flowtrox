@@ -11,7 +11,7 @@ from typing import Tuple
 import numpy as np
 import pandas as pd
 
-from .config import BARS_PER_DAY, HAR_WEEKLY_WINDOW, HAR_MONTHLY_WINDOW, HMM_LOOKBACK
+from .config import BARS_PER_DAY, HAR_WEEKLY_WINDOW, HAR_MONTHLY_WINDOW, HMM_LOOKBACK, HMM_N_INIT as _HMM_N_INIT
 from .har_model import fit_har_model, compute_har_vol_forecast
 from .hmm_model import fit_hmm_model, compute_hmm_posteriors
 
@@ -178,6 +178,7 @@ def engineer_features(
     vol_thresholds: dict = None,
     fit_models: bool = True,
     hmm_n_init: int = None,
+    regime_model: str = "gmm",
 ) -> Tuple[pd.DataFrame, dict]:
     """Master feature engineering pipeline (Spec 2.13).
 
@@ -231,15 +232,18 @@ def engineer_features(
 
     # 2.9 HMM posteriors
     if fit_models:
-        if hmm_n_init is not None:
-            hmm_model, scaler, label_map = fit_hmm_model(hmm_features, n_init=hmm_n_init)
-        else:
-            hmm_model, scaler, label_map = fit_hmm_model(hmm_features)
+        _ninit = hmm_n_init if hmm_n_init is not None else _HMM_N_INIT
+        hmm_model, scaler, label_map = fit_hmm_model(
+            hmm_features, n_init=_ninit, model_type=regime_model
+        )
         fitted["hmm_model"] = hmm_model
         fitted["scaler"] = scaler
         fitted["label_map"] = label_map
+        fitted["regime_model"] = regime_model
 
-    posteriors = compute_hmm_posteriors(hmm_features, hmm_model, scaler, label_map)
+    posteriors = compute_hmm_posteriors(
+        hmm_features, hmm_model, scaler, label_map, model_type=regime_model
+    )
     result = pd.concat([result, posteriors], axis=1)
 
     # 2.10 BVC direction

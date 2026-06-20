@@ -36,6 +36,7 @@ const DEFAULT_PARAMS = {
   max_hold_bars: 15,
   regime_exit_enabled: true,
   drawdown_method: "anchored",
+  regime_model: "gmm",
 };
 
 export default function App() {
@@ -105,7 +106,7 @@ export default function App() {
       setJobPct(0);
       setBestScore(null);
       setJobEvents([{ ts: new Date().toISOString(), stage: "queued", message: `Starting walk-forward optimization on ${symbol}\u2026`, pct: 0 }]);
-      const { job_id } = await startOptimize(symbol, params.drawdown_method || "anchored");
+      const { job_id } = await startOptimize(symbol, params.drawdown_method || "anchored", params.regime_model || "gmm");
       setJobId(job_id);
       toast.info("Walk-forward optimization started (several minutes)");
 
@@ -139,7 +140,7 @@ export default function App() {
       setJobStatus("failed");
       toast.error(`Could not start optimization: ${msg}`);
     }
-  }, [symbol, params.drawdown_method]);
+  }, [symbol, params.drawdown_method, params.regime_model]);
 
   useEffect(() => stopPolling, []);
 

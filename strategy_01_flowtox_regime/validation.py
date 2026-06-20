@@ -60,6 +60,7 @@ def run_walk_forward_optimization(
     progress_cb: Optional[Callable[[dict], None]] = None,
     hmm_n_init: int = 3,
     costs: Optional[dict] = None,
+    regime_model: str = "gmm",
 ) -> dict:
     """Optimize the 3 parameters (tau1, tau2, N) via walk-forward analysis.
 
@@ -82,7 +83,7 @@ def run_walk_forward_optimization(
     for wi, (w_start, w_train_end, w_test_end) in enumerate(windows):
         w_train = train_df.iloc[w_start:w_train_end]
         w_test = train_df.iloc[w_train_end:w_test_end]
-        _, w_fitted = engineer_features(w_train, fit_models=True, hmm_n_init=hmm_n_init)
+        _, w_fitted = engineer_features(w_train, fit_models=True, hmm_n_init=hmm_n_init, regime_model=regime_model)
         w_test_feat, _ = engineer_features(
             w_test,
             fit_models=False,
@@ -91,6 +92,7 @@ def run_walk_forward_optimization(
             scaler=w_fitted["scaler"],
             label_map=w_fitted["label_map"],
             vol_thresholds=w_fitted["vol_thresholds"],
+            regime_model=regime_model,
         )
         n_days = w_test["ts_event"].dt.date.nunique()
         window_feats.append((w_test_feat, n_days))

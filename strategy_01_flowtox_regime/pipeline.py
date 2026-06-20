@@ -46,9 +46,9 @@ def load_instrument_data(symbol: str = "ES"):
     return train_df, test_df, inst
 
 
-def _fit_train_models(train_df: pd.DataFrame, hmm_n_init: int = 10):
-    """Fit HAR + GMM + vol thresholds on the full training set."""
-    _, fitted = engineer_features(train_df, fit_models=True, hmm_n_init=hmm_n_init)
+def _fit_train_models(train_df: pd.DataFrame, hmm_n_init: int = 10, regime_model: str = "gmm"):
+    """Fit HAR + GMM/HMM + vol thresholds on the full training set."""
+    _, fitted = engineer_features(train_df, fit_models=True, hmm_n_init=hmm_n_init, regime_model=regime_model)
     return fitted
 
 
@@ -64,6 +64,7 @@ def _evaluate_on_test(test_df: pd.DataFrame, fitted: dict, params: dict, costs: 
         scaler=fitted["scaler"],
         label_map=fitted["label_map"],
         vol_thresholds=fitted["vol_thresholds"],
+        regime_model=fitted.get("regime_model", "gmm"),
     )
     signals = generate_signals(test_feat, params, point_value=costs.get("point_value", 50.0))
     result = backtest(
@@ -118,6 +119,7 @@ def run_full_pipeline(
     hmm_n_init_final: int = 10,
     hmm_n_init_wf: int = 3,
     drawdown_method: str = "anchored",
+    regime_model: str = "gmm",
 ) -> dict:
     """Full pipeline: walk-forward optimize on train, evaluate best params on test."""
     if progress_cb:
@@ -127,12 +129,13 @@ def run_full_pipeline(
 
     if progress_cb:
         progress_cb({"stage": "optimize", "message": "Starting walk-forward optimization", "pct": 3})
-    wf = run_walk_forward_optimization(train_df, progress_cb=progress_cb, hmm_n_init=hmm_n_init_wf, costs=costs)
+    wf = run_walk_forward_optimization(train_df, progress_cb=progress_cb, hmm_n_init=hmm_n_init_wf,
+                                       costs=costs, regime_model=regime_model)
     best_params = wf["best_params"]
 
     if progress_cb:
         progress_cb({"stage": "fit", "message": "Fitting final models on full train set", "pct": 92})
-    fitted = _fit_train_models(train_df, hmm_n_init=hmm_n_init_final)
+    fitted = _fit_train_models(train_df, hmm_n_init=hmm_n_init_final, regime_model=regime_model)
 
     if progress_cb:
         progress_cb({"stage": "test", "message": "Evaluating best params on test set", "pct": 96})

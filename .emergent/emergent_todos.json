@@ -1,30 +1,30 @@
 [
   {
-    "content": "Engine: spec-exact drawdown toggle (both exposed)",
+    "content": "Install hmmlearn + requirements",
     "status": "completed"
   },
   {
-    "content": "Engine: diagnostics module (PSR, Deflated Sharpe, PBO/CSCV, bootstrap CI)",
+    "content": "hmm_model.py: GaussianHMM + filtered no-lookahead posteriors; keep GMM",
     "status": "completed"
   },
   {
-    "content": "Validation: capture window×combo matrix + trial sharpes",
+    "content": "Thread regime_model through features/pipeline/validation",
     "status": "completed"
   },
   {
-    "content": "Pipeline/service: diagnostics + drawdown_method threading",
+    "content": "Service: cache per (symbol, regime_model) + transition matrix in model_info",
     "status": "completed"
   },
   {
-    "content": "Backend: drawdown_method params + Pine download endpoint",
+    "content": "Backend: regime_model request params",
     "status": "completed"
   },
   {
-    "content": "Frontend: dual drawdown, Robustness panel, dd toggle, Pine button",
+    "content": "Frontend: regime-model toggle + transition matrix display",
     "status": "completed"
   },
   {
-    "content": "Validate via optimization run + testing agent (13/13 passed)",
-    "status": "completed"
+    "content": "Validate (engine + API + UI) + testing agent",
+    "status": "in_progress"
   }
 ]

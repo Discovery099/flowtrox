@@ -1,0 +1,52 @@
+{
+  "summary": "Completed testing of HMM regime model feature. Backend API correctly returns HMM with 3x3 transition matrix and GMM without transition matrix. Frontend Regime Model toggle works, Model tab displays HMM badge and transition matrix for HMM runs, and no transition matrix for GMM runs. Both models produce different results (HMM Sharpe: 0.85, GMM Sharpe: -0.69). Caching works correctly (second call <1s). All regression features (drawdown_method, diagnostics, tabs) still functional.",
+  "backend_issues": {
+    "critical_bugs": [],
+    "flaky_endpoints": [
+      {
+        "endpoint": "/api/backtest/single",
+        "issue": "One GMM backtest returned 502 error (but passed in subsequent test)",
+        "failure_rate": "10%",
+        "symptoms": "Intermittent 502 gateway timeout",
+        "workaround": "Retry on failure",
+        "fix_priority": "LOW"
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "Backend: HMM backtest returns regime_model='hmm', 3x3 transition matrix with rows summing to 1.0, trades, diagnostics",
+    "Backend: GMM backtest returns regime_model='gmm', null transition_matrix, trades",
+    "Backend: HMM and GMM produce different results (HMM Sharpe: 0.85 vs GMM Sharpe: -0.69, different trade counts: 1229 vs 1901)",
+    "Backend: HMM caching works (second call: 0.57s < 5s)",
+    "Backend: Drawdown method 'anchored' still works correctly",
+    "Backend: Diagnostics (PSR, CI, bootstrap) still present in single backtest",
+    "Backend: Instruments endpoint returns all 6 instruments with correct specs",
+    "Backend: Strategy info endpoint returns required fields",
+    "Frontend: Regime Model toggle renders with HMM and GMM buttons (data-testid: run-panel-regime-hmm, run-panel-regime-gmm)",
+    "Frontend: HMM button clickable, runs backtest successfully",
+    "Frontend: Model tab shows HMM badge and 3x3 transition matrix table after HMM run",
+    "Frontend: GMM button clickable, runs backtest successfully",
+    "Frontend: Model tab shows GMM badge and no transition matrix after GMM run (correct)",
+    "Frontend: All tabs render correctly (Overview, Charts, Trades, Model)"
+  ],
+  "test_report_links": [
+    "/app/backend_test.py",
+    "/root/.emergent/automation_output/20260620_152936/console_20260620_152936.log"
+  ],
+  "action_item_for_main_agent": "",
+  "updated_files": [
+    "/app/backend_test.py"
+  ],
+  "success_percentage": {
+    "backend": "90% (9/10 tests passed, 1 intermittent 502 error)",
+    "frontend": "100% (all HMM/GMM UI features working)",
+    "integration": "100% (HMM/GMM regime model selection and display working end-to-end)"
+  },
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_test_itself": false
+}

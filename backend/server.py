@@ -39,12 +39,14 @@ class BacktestRequest(BaseModel):
     max_hold_bars: int = Field(15, ge=1, le=200)
     regime_exit_enabled: bool = True
     drawdown_method: str = Field("anchored", pattern="^(anchored|spec)$")
+    regime_model: str = Field("gmm", pattern="^(gmm|hmm)$")
 
 
 class OptimizeRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
     symbol: str = "ES"
     drawdown_method: str = Field("anchored", pattern="^(anchored|spec)$")
+    regime_model: str = Field("gmm", pattern="^(gmm|hmm)$")
 
 
 # ---------------------------------------------------------------------------
@@ -74,7 +76,7 @@ async def model_status(symbol: str = "ES"):
 async def model_warm(req: OptimizeRequest):
     """Fit + cache models for a symbol (first call is slow ~60s)."""
     try:
-        cache = await run_in_threadpool(svc.ensure_models, req.symbol)
+        cache = await run_in_threadpool(svc.ensure_models, req.symbol, req.regime_model)
         return {"symbol": req.symbol.upper(), "ready": True, "model_info": cache["model_info"]}
     except Exception as exc:  # noqa: BLE001
         logger.exception("model_warm failed")
@@ -90,7 +92,7 @@ async def backtest_single(req: BacktestRequest):
         "regime_exit_enabled": bool(req.regime_exit_enabled),
     }
     try:
-        payload = await run_in_threadpool(svc.run_single, req.symbol, params, req.drawdown_method)
+        payload = await run_in_threadpool(svc.run_single, req.symbol, params, req.drawdown_method, req.regime_model)
         return payload
     except Exception as exc:  # noqa: BLE001
         logger.exception("backtest_single failed")
@@ -100,7 +102,7 @@ async def backtest_single(req: BacktestRequest):
 @api_router.post("/optimize/start")
 async def optimize_start(req: OptimizeRequest):
     try:
-        job_id = svc.start_optimization(req.symbol, req.drawdown_method)
+        job_id = svc.start_optimization(req.symbol, req.drawdown_method, req.regime_model)
         return {"job_id": job_id, "status": "queued"}
     except Exception as exc:  # noqa: BLE001
         logger.exception("optimize_start failed")

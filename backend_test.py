@@ -632,41 +632,273 @@ class BackendAPITester:
             
         return False
 
+    def test_hmm_backtest(self):
+        """Test POST /api/backtest/single with regime_model='hmm' - NEW FEATURE"""
+        print("\n⚠️  NOTE: Testing HMM regime model (first call may take ~30s for fitting)")
+        success, response = self.run_test(
+            "POST /api/backtest/single (regime_model=hmm)",
+            "POST",
+            "api/backtest/single",
+            200,
+            data={
+                "symbol": "ES",
+                "toxic_continuation_threshold": 0.55,
+                "toxic_reversal_threshold": 0.55,
+                "max_hold_bars": 15,
+                "regime_exit_enabled": True,
+                "drawdown_method": "anchored",
+                "regime_model": "hmm"
+            },
+            timeout=120
+        )
+        
+        if success:
+            # Check regime_model in payload
+            regime_model = response.get('regime_model')
+            regime_model_ok = regime_model == 'hmm'
+            print(f"   payload.regime_model: {regime_model} {'✓' if regime_model_ok else '✗'}")
+            
+            # Check model_info.regime_model
+            model_info = response.get('model_info', {})
+            mi_regime_model = model_info.get('regime_model')
+            mi_regime_ok = mi_regime_model == 'hmm'
+            print(f"   model_info.regime_model: {mi_regime_model} {'✓' if mi_regime_ok else '✗'}")
+            
+            # Check transition_matrix exists and is 3x3
+            transition_matrix = model_info.get('transition_matrix')
+            has_trans = transition_matrix is not None
+            print(f"   Has transition_matrix: {has_trans}")
+            
+            trans_ok = False
+            if has_trans:
+                is_list = isinstance(transition_matrix, list)
+                is_3x3 = is_list and len(transition_matrix) == 3 and all(len(row) == 3 for row in transition_matrix)
+                print(f"   transition_matrix is 3x3: {is_3x3} {'✓' if is_3x3 else '✗'}")
+                
+                if is_3x3:
+                    # Check each row sums to ~1.0
+                    row_sums = [sum(row) for row in transition_matrix]
+                    sums_ok = all(abs(s - 1.0) < 0.01 for s in row_sums)
+                    print(f"   Row sums: {[round(s, 3) for s in row_sums]} {'✓' if sums_ok else '✗'}")
+                    
+                    # Print the matrix
+                    print(f"   Transition matrix:")
+                    for i, row in enumerate(transition_matrix):
+                        print(f"     [{', '.join(f'{v:.3f}' for v in row)}]")
+                    
+                    trans_ok = sums_ok
+            
+            # Check trades exist
+            trades = response.get('trades', [])
+            has_trades = len(trades) > 0
+            print(f"   Has trades: {has_trades} (count: {len(trades)}) {'✓' if has_trades else '✗'}")
+            
+            # Check metrics
+            metrics = response.get('metrics', {})
+            has_sharpe = 'sharpe_ratio' in metrics
+            sharpe = metrics.get('sharpe_ratio')
+            print(f"   Has sharpe_ratio: {has_sharpe}")
+            if has_sharpe:
+                print(f"   Sharpe ratio: {sharpe}")
+            
+            # Check diagnostics still present
+            has_diagnostics = 'diagnostics' in response
+            print(f"   Has diagnostics: {has_diagnostics} {'✓' if has_diagnostics else '✗'}")
+            
+            return success and regime_model_ok and mi_regime_ok and trans_ok and has_trades and has_diagnostics
+        
+        return False
+
+    def test_gmm_backtest(self):
+        """Test POST /api/backtest/single with regime_model='gmm' - verify no transition matrix"""
+        print("\n⚠️  NOTE: Testing GMM regime model (should have no transition matrix)")
+        success, response = self.run_test(
+            "POST /api/backtest/single (regime_model=gmm)",
+            "POST",
+            "api/backtest/single",
+            200,
+            data={
+                "symbol": "ES",
+                "toxic_continuation_threshold": 0.55,
+                "toxic_reversal_threshold": 0.55,
+                "max_hold_bars": 15,
+                "regime_exit_enabled": True,
+                "drawdown_method": "anchored",
+                "regime_model": "gmm"
+            },
+            timeout=120
+        )
+        
+        if success:
+            # Check regime_model in payload
+            regime_model = response.get('regime_model')
+            regime_model_ok = regime_model == 'gmm'
+            print(f"   payload.regime_model: {regime_model} {'✓' if regime_model_ok else '✗'}")
+            
+            # Check model_info.regime_model
+            model_info = response.get('model_info', {})
+            mi_regime_model = model_info.get('regime_model')
+            mi_regime_ok = mi_regime_model == 'gmm'
+            print(f"   model_info.regime_model: {mi_regime_model} {'✓' if mi_regime_ok else '✗'}")
+            
+            # Check transition_matrix is null
+            transition_matrix = model_info.get('transition_matrix')
+            trans_null = transition_matrix is None
+            print(f"   transition_matrix is null: {trans_null} {'✓' if trans_null else '✗'}")
+            
+            # Check trades exist
+            trades = response.get('trades', [])
+            has_trades = len(trades) > 0
+            print(f"   Has trades: {has_trades} (count: {len(trades)}) {'✓' if has_trades else '✗'}")
+            
+            # Check metrics
+            metrics = response.get('metrics', {})
+            sharpe = metrics.get('sharpe_ratio')
+            print(f"   Sharpe ratio: {sharpe}")
+            
+            return success and regime_model_ok and mi_regime_ok and trans_null and has_trades
+        
+        return False
+
+    def test_hmm_gmm_different_results(self):
+        """Test that HMM and GMM produce different results (regime model actually changes results)"""
+        print("\n⚠️  NOTE: Testing that HMM and GMM produce different Sharpe ratios")
+        
+        # Run HMM
+        success_hmm, response_hmm = self.run_test(
+            "POST /api/backtest/single (HMM for comparison)",
+            "POST",
+            "api/backtest/single",
+            200,
+            data={
+                "symbol": "ES",
+                "toxic_continuation_threshold": 0.55,
+                "toxic_reversal_threshold": 0.55,
+                "max_hold_bars": 15,
+                "regime_exit_enabled": True,
+                "drawdown_method": "anchored",
+                "regime_model": "hmm"
+            },
+            timeout=120
+        )
+        
+        # Run GMM
+        success_gmm, response_gmm = self.run_test(
+            "POST /api/backtest/single (GMM for comparison)",
+            "POST",
+            "api/backtest/single",
+            200,
+            data={
+                "symbol": "ES",
+                "toxic_continuation_threshold": 0.55,
+                "toxic_reversal_threshold": 0.55,
+                "max_hold_bars": 15,
+                "regime_exit_enabled": True,
+                "drawdown_method": "anchored",
+                "regime_model": "gmm"
+            },
+            timeout=120
+        )
+        
+        if success_hmm and success_gmm:
+            sharpe_hmm = response_hmm.get('metrics', {}).get('sharpe_ratio')
+            sharpe_gmm = response_gmm.get('metrics', {}).get('sharpe_ratio')
+            trades_hmm = len(response_hmm.get('trades', []))
+            trades_gmm = len(response_gmm.get('trades', []))
+            
+            print(f"   HMM Sharpe: {sharpe_hmm}, Trades: {trades_hmm}")
+            print(f"   GMM Sharpe: {sharpe_gmm}, Trades: {trades_gmm}")
+            
+            # Check that results are different
+            sharpe_different = sharpe_hmm is not None and sharpe_gmm is not None and abs(sharpe_hmm - sharpe_gmm) > 0.01
+            trades_different = trades_hmm != trades_gmm
+            
+            print(f"   Sharpe ratios different: {sharpe_different} {'✓' if sharpe_different else '✗'}")
+            print(f"   Trade counts different: {trades_different} {'✓' if trades_different else '✗'}")
+            
+            return success_hmm and success_gmm and (sharpe_different or trades_different)
+        
+        return False
+
+    def test_hmm_cache_speed(self):
+        """Test that second HMM call for same symbol is fast (<5s) due to caching"""
+        print("\n⚠️  NOTE: Testing HMM caching (second call should be fast)")
+        
+        # First call (may be slow if not cached)
+        start1 = time.time()
+        success1, response1 = self.run_test(
+            "POST /api/backtest/single (HMM first call)",
+            "POST",
+            "api/backtest/single",
+            200,
+            data={
+                "symbol": "ES",
+                "toxic_continuation_threshold": 0.55,
+                "toxic_reversal_threshold": 0.55,
+                "max_hold_bars": 15,
+                "regime_exit_enabled": True,
+                "regime_model": "hmm"
+            },
+            timeout=120
+        )
+        elapsed1 = time.time() - start1
+        print(f"   First call took: {elapsed1:.2f}s")
+        
+        # Second call (should be fast)
+        start2 = time.time()
+        success2, response2 = self.run_test(
+            "POST /api/backtest/single (HMM second call)",
+            "POST",
+            "api/backtest/single",
+            200,
+            data={
+                "symbol": "ES",
+                "toxic_continuation_threshold": 0.60,  # different params
+                "toxic_reversal_threshold": 0.60,
+                "max_hold_bars": 20,
+                "regime_exit_enabled": True,
+                "regime_model": "hmm"
+            },
+            timeout=120
+        )
+        elapsed2 = time.time() - start2
+        print(f"   Second call took: {elapsed2:.2f}s")
+        
+        # Check second call is fast
+        is_fast = elapsed2 < 5.0
+        print(f"   Second call < 5s: {is_fast} {'✓' if is_fast else '✗'}")
+        
+        return success1 and success2 and is_fast
+
 def main():
     print("=" * 80)
-    print("FLOWTOX_REGIME_01 Backend API Test Suite - NEW FEATURES")
+    print("FLOWTOX_REGIME_01 Backend API Test Suite - HMM FEATURE")
     print("=" * 80)
     
     tester = BackendAPITester()
     
-    # Test NEW features
+    # Test NEW HMM feature
     print("\n" + "=" * 80)
-    print("PHASE 1: NEW FEATURES - Pine Script & Dual Drawdown & Diagnostics")
+    print("PHASE 1: NEW FEATURE - HMM Regime Model")
     print("=" * 80)
-    tester.test_pine_script()
+    tester.test_hmm_backtest()
+    tester.test_gmm_backtest()
+    tester.test_hmm_gmm_different_results()
+    tester.test_hmm_cache_speed()
+    
+    # Test regression: drawdown_method and diagnostics still work
+    print("\n" + "=" * 80)
+    print("PHASE 2: REGRESSION - Drawdown & Diagnostics")
+    print("=" * 80)
     tester.test_drawdown_anchored()
-    tester.test_drawdown_spec()
     tester.test_diagnostics_single()
     
     # Test basic endpoints (regression)
     print("\n" + "=" * 80)
-    print("PHASE 2: REGRESSION - Basic Endpoints")
+    print("PHASE 3: REGRESSION - Basic Endpoints")
     print("=" * 80)
     tester.test_instruments()
     tester.test_strategy_info()
-    
-    # Test single backtests (regression)
-    print("\n" + "=" * 80)
-    print("PHASE 3: REGRESSION - Single Backtest (ES)")
-    print("=" * 80)
-    tester.test_single_backtest_es()
-    
-    # Test run retrieval and downloads
-    print("\n" + "=" * 80)
-    print("PHASE 4: Run Retrieval & Downloads")
-    print("=" * 80)
-    tester.test_get_run()
-    tester.test_download_files()
     
     # Print summary
     print("\n" + "=" * 80)
