@@ -61,28 +61,57 @@ let webpackConfig = {
 };
 
 webpackConfig.devServer = (devServerConfig) => {
-  // Add health check endpoints if enabled
-  if (config.enableHealthCheck && setupHealthEndpoints && healthPluginInstance) {
-    const originalSetupMiddlewares = devServerConfig.setupMiddlewares;
+  // ---------------------------------------------------------------------
+  // webpack-dev-server v4 -> v5 compatibility shim.
+  // CRA 5 (react-scripts) injects `onBeforeSetupMiddleware` and
+  // `onAfterSetupMiddleware` (v4 API). The project pins webpack-dev-server v5
+  // (via resolutions), whose schema rejects those keys and crashes the dev
+  // server. We migrate them to v5's `setupMiddlewares`.
+  const before = devServerConfig.onBeforeSetupMiddleware;
+  const after = devServerConfig.onAfterSetupMiddleware;
+  delete devServerConfig.onBeforeSetupMiddleware;
+  delete devServerConfig.onAfterSetupMiddleware;
 
-    devServerConfig.setupMiddlewares = (middlewares, devServer) => {
-      // Call original setup if exists
-      if (originalSetupMiddlewares) {
-        middlewares = originalSetupMiddlewares(middlewares, devServer);
-      }
+  const prevSetupMiddlewares = devServerConfig.setupMiddlewares;
 
-      // Setup health endpoints
+  devServerConfig.setupMiddlewares = (middlewares, devServer) => {
+    if (typeof before === "function") before(devServer);
+    if (typeof prevSetupMiddlewares === "function") {
+      middlewares = prevSetupMiddlewares(middlewares, devServer);
+    }
+    if (typeof after === "function") after(devServer);
+
+    // Add health check endpoints if enabled
+    if (config.enableHealthCheck && setupHealthEndpoints && healthPluginInstance) {
       setupHealthEndpoints(devServer, healthPluginInstance);
+    }
 
-      return middlewares;
-    };
+    return middlewares;
+  };
+
+  // Allow the preview/proxy host through wds v5 host checking.
+  devServerConfig.allowedHosts = "all";
+
+  // v4 `https` option was replaced by `server` in v5.
+  if (Object.prototype.hasOwnProperty.call(devServerConfig, "https")) {
+    const https = devServerConfig.https;
+    delete devServerConfig.https;
+    if (https && typeof https === "object") {
+      devServerConfig.server = { type: "https", options: https };
+    } else {
+      devServerConfig.server = https ? "https" : "http";
+    }
   }
 
   return devServerConfig;
 };
 
 // Wrap with visual edits (automatically adds babel plugin, dev server, and overlay in dev mode)
-if (isDevServer) {
+// NOTE: Gated off by default because the visual-edits dev-server wrapper injects
+// `onAfterSetupMiddleware` (webpack-dev-server v4 API) which is incompatible with the
+// installed webpack-dev-server v5 and crashes the dev server. Set ENABLE_VISUAL_EDITS=true
+// to re-enable once a compatible visual-edits version is available.
+if (isDevServer && process.env.ENABLE_VISUAL_EDITS === "true") {
   try {
     const { withVisualEdits } = require("@emergentbase/visual-edits/craco");
     webpackConfig = withVisualEdits(webpackConfig);

@@ -1,89 +1,142 @@
-from fastapi import FastAPI, APIRouter
-from dotenv import load_dotenv
-from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
-import os
-import logging
-from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict
-from typing import List
-import uuid
-from datetime import datetime, timezone
+"""FLOWTOX_REGIME_01 backend API.
 
+Wraps the quantitative strategy engine with endpoints for instruments, single
+backtests, walk-forward optimization (background jobs), run retrieval, and
+downloadable artifacts.
+"""
+
+import logging
+import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field, ConfigDict
+from starlette.middleware.cors import CORSMiddleware
+
+import strategy_service as svc
 
 ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
+load_dotenv(ROOT_DIR / ".env")
 
-# MongoDB connection
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
-
-# Create the main app without a prefix
-app = FastAPI()
-
-# Create a router with the /api prefix
+app = FastAPI(title="FLOWTOX_REGIME_01 API")
 api_router = APIRouter(prefix="/api")
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logger = logging.getLogger("flowtox")
 
-# Define Models
-class StatusCheck(BaseModel):
-    model_config = ConfigDict(extra="ignore")  # Ignore MongoDB's _id field
-    
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    client_name: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-class StatusCheckCreate(BaseModel):
-    client_name: str
+# ---------------------------------------------------------------------------
+# Models
+# ---------------------------------------------------------------------------
+class BacktestRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    symbol: str = "ES"
+    toxic_continuation_threshold: float = Field(0.55, ge=0.0, le=1.0)
+    toxic_reversal_threshold: float = Field(0.55, ge=0.0, le=1.0)
+    max_hold_bars: int = Field(15, ge=1, le=200)
+    regime_exit_enabled: bool = True
 
-# Add your routes to the router instead of directly to app
+
+class OptimizeRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    symbol: str = "ES"
+
+
+# ---------------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------------
 @api_router.get("/")
 async def root():
-    return {"message": "Hello World"}
+    return {"service": "FLOWTOX_REGIME_01", "status": "ok"}
 
-@api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    status_dict = input.model_dump()
-    status_obj = StatusCheck(**status_dict)
-    
-    # Convert to dict and serialize datetime to ISO string for MongoDB
-    doc = status_obj.model_dump()
-    doc['timestamp'] = doc['timestamp'].isoformat()
-    
-    _ = await db.status_checks.insert_one(doc)
-    return status_obj
 
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    # Exclude MongoDB's _id field from the query results
-    status_checks = await db.status_checks.find({}, {"_id": 0}).to_list(1000)
-    
-    # Convert ISO string timestamps back to datetime objects
-    for check in status_checks:
-        if isinstance(check['timestamp'], str):
-            check['timestamp'] = datetime.fromisoformat(check['timestamp'])
-    
-    return status_checks
+@api_router.get("/instruments")
+async def instruments():
+    return {"instruments": svc.list_instruments()}
 
-# Include the router in the main app
+
+@api_router.get("/strategy/info")
+async def strategy_info():
+    return svc.strategy_info()
+
+
+@api_router.get("/model/status")
+async def model_status(symbol: str = "ES"):
+    return {"symbol": symbol.upper(), "ready": svc.is_model_ready(symbol)}
+
+
+@api_router.post("/model/warm")
+async def model_warm(req: OptimizeRequest):
+    """Fit + cache models for a symbol (first call is slow ~60s)."""
+    try:
+        cache = await run_in_threadpool(svc.ensure_models, req.symbol)
+        return {"symbol": req.symbol.upper(), "ready": True, "model_info": cache["model_info"]}
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("model_warm failed")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@api_router.post("/backtest/single")
+async def backtest_single(req: BacktestRequest):
+    params = {
+        "toxic_continuation_threshold": float(req.toxic_continuation_threshold),
+        "toxic_reversal_threshold": float(req.toxic_reversal_threshold),
+        "max_hold_bars": int(req.max_hold_bars),
+        "regime_exit_enabled": bool(req.regime_exit_enabled),
+    }
+    try:
+        payload = await run_in_threadpool(svc.run_single, req.symbol, params)
+        return payload
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("backtest_single failed")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@api_router.post("/optimize/start")
+async def optimize_start(req: OptimizeRequest):
+    try:
+        job_id = svc.start_optimization(req.symbol)
+        return {"job_id": job_id, "status": "queued"}
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("optimize_start failed")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@api_router.get("/optimize/status/{job_id}")
+async def optimize_status(job_id: str):
+    job = svc.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job
+
+
+@api_router.get("/runs/{run_id}")
+async def get_run(run_id: str):
+    payload = svc.get_run(run_id)
+    if payload is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return payload
+
+
+@api_router.get("/runs/{run_id}/download/{kind}")
+async def download_run(run_id: str, kind: str):
+    path = svc.run_file_path(run_id, kind)
+    if path is None:
+        raise HTTPException(status_code=404, detail="File not found")
+    filename = os.path.basename(path)
+    media = "application/json" if kind == "metrics" else "text/csv"
+    return FileResponse(path, media_type=media, filename=filename)
+
+
 app.include_router(api_router)
 
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
-
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()

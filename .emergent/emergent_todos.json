@@ -4,27 +4,31 @@
     "status": "completed"
   },
   {
-    "content": "Phase 1: Run POC end-to-end on real ES CSV — validated (data, features, no-leakage, backtest, optimizer all pass)",
+    "content": "Phase 1: Run POC end-to-end on real ES CSV — validated",
     "status": "completed"
   },
   {
-    "content": "Phase 1: Fix until POC passes — done (engine mechanically correct, tractable runtime)",
+    "content": "Phase 1: Fix until POC passes — done",
     "status": "completed"
   },
   {
-    "content": "Phase 2: Get design guidelines (dark terminal aesthetic) from design_agent",
+    "content": "Phase 2: Get design guidelines (dark terminal aesthetic)",
+    "status": "completed"
+  },
+  {
+    "content": "Phase 2: Build FastAPI backend wrapping engine",
+    "status": "completed"
+  },
+  {
+    "content": "Phase 2: Build React dark terminal dashboard",
+    "status": "completed"
+  },
+  {
+    "content": "Phase 2: Fix pre-existing webpack-dev-server v4->v5 craco blocker",
+    "status": "completed"
+  },
+  {
+    "content": "Phase 2: End-to-end testing via testing_agent_v3 (backend + frontend)",
     "status": "in_progress"
-  },
-  {
-    "content": "Phase 2: Build FastAPI backend wrapping engine (instruments, single backtest, optimize, results, downloads)",
-    "status": "pending"
-  },
-  {
-    "content": "Phase 2: Build React dark terminal dashboard (run panel, metrics scorecard, charts, trade log)",
-    "status": "pending"
-  },
-  {
-    "content": "Phase 2: End-to-end testing via testing_agent_v3",
-    "status": "pending"
   }
 ]

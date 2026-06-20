@@ -1,0 +1,31 @@
+{
+  "sharpe_ratio": -0.9171382203248503,
+  "max_drawdown": 1.971864568431092,
+  "win_rate": 0.3898305084745763,
+  "profit_factor": 0.6512322087192186,
+  "trades_per_day": 3.810416666666667,
+  "avg_trade_pnl": -499.56123564789505,
+  "calmar_ratio": -0.5807479217049577,
+  "total_trades": 1829,
+  "total_pnl": -913697.5,
+  "long_trades": 1545,
+  "short_trades": 284,
+  "avg_hold_bars": 3.3909240021869875,
+  "median_hold_bars": 2.0,
+  "total_slippage_cost": 331225.0,
+  "total_commission": 33122.5,
+  "cost_per_trade": 199.2058501913614,
+  "cost_pct_of_gross": 0.08552406884693704,
+  "sharpe_t_stat": -42.00239396508919,
+  "sharpe_p_value": 1.0,
+  "sharpe_significant_5pct": false,
+  "winrate_t_stat": -12.885840970366601,
+  "winrate_p_value": 1.0,
+  "winrate_significant_5pct": false,
+  "params": {
+    "toxic_continuation_threshold": 0.6,
+    "toxic_reversal_threshold": 0.45,
+    "max_hold_bars": 20,
+    "regime_exit_enabled": true
+  }
+}

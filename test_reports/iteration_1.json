@@ -1,0 +1,51 @@
+{
+  "summary": "Completed comprehensive end-to-end testing of FLOWTOX_REGIME_01 quantitative futures trading strategy backtesting system. All backend APIs and frontend UI components tested successfully. Strategy correctly implements the spec and intentionally fails acceptance criteria (Sharpe < 1) as expected per 'honest results' philosophy.",
+  "backend_issues": {
+    "critical_bugs": [],
+    "flaky_endpoints": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "Backend: GET /api/instruments returns ES instrument with correct metadata",
+    "Backend: GET /api/strategy/info returns strategy metadata, param space, and acceptance criteria",
+    "Backend: POST /api/backtest/single executes successfully with all required fields (metrics, checks, model_info, charts, trades)",
+    "Backend: GET /api/runs/{run_id} retrieves stored run payload",
+    "Backend: GET /api/runs/{run_id}/download/{kind} returns downloadable files for metrics, trades, and equity",
+    "Backend: POST /api/optimize/start initiates optimization job and returns job_id",
+    "Backend: GET /api/optimize/status/{job_id} polls successfully and completes in ~195s with best_params, walk_forward_sharpe, and sensitivity grid",
+    "Frontend: Page loads with all UI elements (Run Panel, tabs, controls)",
+    "Frontend: Run Panel renders with instrument select, tau1/tau2/N sliders, regime-exit switch, and action buttons",
+    "Frontend: Parameter sliders and inputs work correctly (tau1, tau2, max_hold_bars)",
+    "Frontend: Regime exit switch toggles correctly",
+    "Frontend: Reset button restores default parameters",
+    "Frontend: Run Single Backtest button executes and populates Overview tab with Acceptance Scorecard (FAIL chips as expected), Metrics grid, Cost Attribution, and Equity Curve",
+    "Frontend: Charts tab renders all 6 charts (Equity Curve, Drawdown, Monthly Returns, P&L Histogram, HMM Regime Posteriors, Volatility Regime)",
+    "Frontend: Trades tab renders trade log table with 1897 trades, search input, direction filter, and CSV download button",
+    "Frontend: Model tab displays HAR-RV parameters, GMM regime weights, and run configuration",
+    "Frontend: All tab navigation works correctly (Overview, Charts, Trades, Model)",
+    "Integration: Single backtest completes with correct data flow from backend to frontend",
+    "Integration: Walk-forward optimization backend endpoints work correctly (tested via API)",
+    "Integration: Progress console displays events and progress percentage",
+    "Acceptance: Strategy correctly fails acceptance criteria (Sharpe -0.84, Win Rate 39%) as expected per spec"
+  ],
+  "test_report_links": [
+    "/app/backend_test.py",
+    "/app/test_optimization.py"
+  ],
+  "success_percentage": {
+    "backend": "100% (9/9 endpoints tested)",
+    "frontend": "100% (all UI components and interactions tested)",
+    "integration": "100% (backend-frontend data flow verified)"
+  },
+  "updated_files": [
+    "/app/backend_test.py",
+    "/app/test_optimization.py"
+  ],
+  "action_item_for_main_agent": "",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_test_itself": false
+}
