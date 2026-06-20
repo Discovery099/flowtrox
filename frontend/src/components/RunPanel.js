@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Play, Sparkles, RotateCcw, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { pineScriptUrl } from "@/lib/api";
+import { toast } from "sonner";
+import { generatedPineScriptUrl } from "@/lib/api";
 import { FileCode2 } from "lucide-react";
 
 const ParamRow = ({ label, sym, testid, value, min, max, step, onChange, decimals = 2 }) => (
@@ -66,6 +67,42 @@ export const RunPanel = ({
 }) => {
   const busy = singleLoading || optimizeRunning;
   const set = (k, v) => setParams((p) => ({ ...p, [k]: v }));
+  const [pineLoading, setPineLoading] = useState(false);
+
+  const regimeLabel = (params.regime_model || "gmm").toUpperCase();
+
+  const onDownloadPine = async () => {
+    const rm = params.regime_model || "gmm";
+    setPineLoading(true);
+    const tid = toast.loading(
+      `Generating faithful ${symbol} ${rm.toUpperCase()} Pine script (fits model on first call, up to ~90s)\u2026`
+    );
+    try {
+      const res = await fetch(generatedPineScriptUrl(symbol, rm));
+      if (!res.ok) {
+        let detail = `HTTP ${res.status}`;
+        try {
+          const j = await res.json();
+          if (j?.detail) detail = j.detail;
+        } catch (_) {}
+        throw new Error(detail);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `FLOWTOX_REGIME_01_${symbol}_${rm}.pine`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success(`${symbol} ${rm.toUpperCase()} Pine script downloaded`, { id: tid });
+    } catch (e) {
+      toast.error(`Pine generation failed: ${e.message}`, { id: tid });
+    } finally {
+      setPineLoading(false);
+    }
+  };
 
   return (
     <Card className="border-[hsl(var(--hairline))] bg-[hsl(var(--card))] p-4">
@@ -253,13 +290,23 @@ export const RunPanel = ({
         <Button
           data-testid="run-panel-pine-download"
           variant="outline"
-          asChild
+          onClick={onDownloadPine}
+          disabled={busy || pineLoading}
           className="mt-1 w-full gap-2 border-[hsl(var(--hairline))] text-muted-foreground hover:text-foreground"
         >
-          <a href={pineScriptUrl()} download>
-            <FileCode2 className="h-4 w-4" /> Download Pine Script
-          </a>
+          {pineLoading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <FileCode2 className="h-4 w-4" />
+          )}
+          Download Pine Script ({symbol} {regimeLabel})
         </Button>
+        <p className="text-[10px] leading-4 text-muted-foreground">
+          Faithful TradingView v6 export with this instrument's fitted{" "}
+          {regimeLabel} model baked in (exact regime posteriors). Data-feed
+          differences mean TradingView results won't match the Python backtest
+          bar-for-bar.
+        </p>
       </div>
     </Card>
   );

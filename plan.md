@@ -118,6 +118,34 @@
 
 ---
 
+## Phase 4 — Faithful Pine Script export (COMPLETED)
+Goal: turn the strategy into a TradingView-backtestable Pine v6 script as the
+first step toward live data + paper trading.
+
+- ✅ `backend/pine_exporter.py`: fits/loads the frozen model for a (symbol,
+  regime_model) and BAKES exact parameters into a self-contained Pine v6
+  strategy:
+  - HAR-RV OLS coefficients, train-set vol-regime p33/p67, StandardScaler
+    mean/scale.
+  - Gaussian emission log-likelihoods via baked inverse-covariances + log-norm
+    constants (5x5 quadratic form fully unrolled).
+  - GMM path -> log(weight)+emission softmax; HMM path -> forward FILTERING
+    recursion (baked startprob + transition matrix), no look-ahead.
+- ✅ Numerically verified vs. the Python engine to MACHINE PRECISION
+  (GMM max-abs-diff 1.6e-15, HMM 1.7e-13) on real ES test bars.
+- ✅ Endpoint `GET /api/pine-script/generate?symbol=&regime_model=` (threadpool;
+  cold symbol fits ~25-90s, warm instant). Static `/api/pine-script` kept as a
+  generic fallback.
+- ✅ Frontend: Download button now generates the faithful script for the
+  selected instrument + regime model, with a loading toast + blob download
+  ("Download Pine Script (ES HMM)" etc.).
+- HONEST CAVEAT documented in-script: TradingView's data feed differs from the
+  RTH CSV, so trade-for-trade P&L won't match Python; logic + model are faithful.
+
+**Next (future, per user):** validate results on TradingView -> add live market
+data feed -> paper trading mode (IBKR/Tradovate bridge or TradingView alerts).
+
+
 ## 3) Next Actions (immediate)
 1. Run `testing_agent_v3` end-to-end (backend + frontend) and fix any failures.
 2. Add/confirm unit tests (`pytest`) for core engine invariants and deterministic behavior.

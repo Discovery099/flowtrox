@@ -12,7 +12,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI, APIRouter, HTTPException
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field, ConfigDict
 from starlette.middleware.cors import CORSMiddleware
 
@@ -111,11 +111,37 @@ async def optimize_start(req: OptimizeRequest):
 
 @api_router.get("/pine-script")
 async def pine_script():
-    """Download the TradingView Pine Script port of the strategy."""
+    """Download the (generic, proxy-regime) TradingView Pine Script port."""
     path = "/app/strategy_01_flowtox_regime/FLOWTOX_REGIME_01.pine"
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Pine script not found")
     return FileResponse(path, media_type="text/plain", filename="FLOWTOX_REGIME_01.pine")
+
+
+@api_router.get("/pine-script/generate")
+async def pine_script_generate(symbol: str = "ES", regime_model: str = "gmm"):
+    """Generate a FAITHFUL Pine v6 strategy with the instrument's fitted model
+    parameters baked in (exact GMM softmax / HMM forward-filter posteriors).
+
+    First call for a cold symbol fits the model (~25-90s); subsequent calls are
+    fast (model cache reused)."""
+    regime_model = regime_model.lower()
+    if regime_model not in ("gmm", "hmm"):
+        raise HTTPException(status_code=400, detail="regime_model must be 'gmm' or 'hmm'")
+    try:
+        import pine_exporter as pex
+        text = await run_in_threadpool(pex.generate_pine, symbol, regime_model)
+        fname = pex.filename_for(symbol, regime_model)
+        return Response(
+            content=text,
+            media_type="text/plain",
+            headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("pine_script_generate failed")
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @api_router.get("/optimize/status/{job_id}")

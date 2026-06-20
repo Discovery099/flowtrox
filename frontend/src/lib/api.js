@@ -16,5 +16,7 @@ export const getJobStatus = (jobId) =>
   client.get(`/optimize/status/${jobId}`).then((r) => r.data);
 export const downloadUrl = (runId, kind) => `${API}/runs/${runId}/download/${kind}`;
 export const pineScriptUrl = () => `${API}/pine-script`;
+export const generatedPineScriptUrl = (symbol, regimeModel = "gmm") =>
+  `${API}/pine-script/generate?symbol=${encodeURIComponent(symbol)}&regime_model=${encodeURIComponent(regimeModel)}`;
 
 export default client;

@@ -1,18 +1,22 @@
 [
   {
-    "content": "Validate cold-start pre-warm fix end-to-end (backend + UI)",
+    "content": "Build pine_exporter.py: faithful baked-model Pine v6 generator (GMM softmax + HMM forward-filter) - verified to machine precision vs Python",
     "status": "completed"
   },
   {
-    "content": "Run comprehensive testing agent (backend + frontend), confirm cold-start test passes",
+    "content": "Add backend endpoint /api/pine-script/generate?symbol=&regime_model= (threadpool) returning the baked Pine file",
     "status": "completed"
   },
   {
-    "content": "Fix any bugs surfaced by testing agent",
+    "content": "Wire frontend Download Pine Script button to generate per selected symbol + regime model",
     "status": "completed"
   },
   {
-    "content": "Update plan.md to mark P0 phase COMPLETED",
+    "content": "Validate end-to-end (endpoint curl + UI download) and clean up temp files",
+    "status": "completed"
+  },
+  {
+    "content": "Update plan.md with the Pine export phase",
     "status": "completed"
   }
 ]
