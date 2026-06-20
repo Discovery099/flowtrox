@@ -60,7 +60,27 @@ Run the standalone POC validation: `python /app/test_core.py`.
 - `POST /api/optimize/start` `{symbol}` → `{job_id}`; poll `GET /api/optimize/status/{job_id}`
 - `GET  /api/runs/{run_id}` and `GET /api/runs/{run_id}/download/{metrics|trades|equity}`
 
-## Adding another futures instrument (same CSV schema as ES)
+## Registered instruments
+
+All six share the ES CSV schema. Realized variance is grouped by **actual
+calendar date**, so different session lengths are handled automatically.
+Train/test split is the spec index for ES and a proportional ~70% split for the
+micros.
+
+| Symbol | Name | Tick | Point value | Bars/day |
+|---|---|---|---|---|
+| ES  | E-mini S&P 500            | 0.25 | $50  | 78 |
+| MES | Micro E-mini S&P 500      | 0.25 | $5   | 78 |
+| MNQ | Micro E-mini Nasdaq-100   | 0.25 | $2   | 78 |
+| M2K | Micro E-mini Russell 2000 | 0.10 | $5   | 78 |
+| MGC | Micro Gold                | 0.10 | $10  | ~62 |
+| MCL | Micro WTI Crude Oil       | 0.01 | $100 | ~66 |
+
+> Cost model is the spec's ES default for all (1 tick/side slippage, $2.50 RT
+> commission); slippage auto-scales by each instrument's tick size. Adjust per
+> instrument in `config.py` (`commission_rt`, `slippage_ticks`) if desired.
+
+## Adding another futures instrument (same CSV schema)
 
 The system is multi-instrument ready. To add e.g. **NQ**:
 

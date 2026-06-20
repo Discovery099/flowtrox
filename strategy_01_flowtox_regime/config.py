@@ -150,6 +150,40 @@ INSTRUMENTS = {
     },
 }
 
+# ---------------------------------------------------------------------------
+# Micro futures (same CSV schema as ES). Realized variance is grouped by actual
+# calendar date, so differing session lengths (MGC ~62 bars, MCL ~66 bars) are
+# handled correctly. train_end_index=None -> proportional ~70% split at load.
+# ---------------------------------------------------------------------------
+_DATA_DIR = "/app/backend/data"
+
+
+def _micro(symbol, name, tick_size, point_value, bars_per_day):
+    return {
+        "name": name,
+        "csv_path": f"{_DATA_DIR}/{symbol}_5min_RTH_6year.csv",
+        "contract_specs": {
+            "tick_size": tick_size,
+            "tick_value": round(tick_size * point_value, 4),
+            "point_value": point_value,
+            "multiplier": point_value,
+            "symbol": symbol,
+            "exchange": "CME",
+            "currency": "USD",
+        },
+        "slippage_ticks": SLIPPAGE_TICKS,
+        "commission_rt": COMMISSION_RT,
+        "bars_per_day": bars_per_day,
+        "train_end_index": None,  # proportional ~70% split computed at load
+    }
+
+
+INSTRUMENTS["MES"] = _micro("MES", "Micro E-mini S&P 500", 0.25, 5.0, 78)
+INSTRUMENTS["MNQ"] = _micro("MNQ", "Micro E-mini Nasdaq-100", 0.25, 2.0, 78)
+INSTRUMENTS["M2K"] = _micro("M2K", "Micro E-mini Russell 2000", 0.10, 5.0, 78)
+INSTRUMENTS["MGC"] = _micro("MGC", "Micro Gold", 0.10, 10.0, 62)
+INSTRUMENTS["MCL"] = _micro("MCL", "Micro WTI Crude Oil", 0.01, 100.0, 66)
+
 
 def get_instrument(symbol: str) -> dict:
     """Return the registry entry for a symbol (case-insensitive)."""

@@ -139,6 +139,10 @@ def ensure_models(symbol: str) -> dict:
             "test_start": test_df["ts_event"].min().isoformat(),
             "test_end": test_df["ts_event"].max().isoformat(),
             "toxicity_rate": float((test_feat["toxicity_disagreement"] < 0).mean()),
+            "tick_size": float(inst["contract_specs"]["tick_size"]),
+            "point_value": float(inst["contract_specs"]["point_value"]),
+            "commission_rt": float(inst["commission_rt"]),
+            "instrument_name": inst["name"],
         }
 
         _MODEL_CACHE[symbol] = {
@@ -300,10 +304,17 @@ def run_single(symbol: str, params: dict) -> dict:
     from strategy_01_flowtox_regime.signal_generator import generate_signals
     from strategy_01_flowtox_regime.backtest import backtest
     from strategy_01_flowtox_regime.metrics import compute_all_metrics, check_acceptance
+    from strategy_01_flowtox_regime.pipeline import costs_from_inst
 
+    costs = costs_from_inst(cache["inst"])
     test_feat = cache["test_feat"]
-    sigs = generate_signals(test_feat, params)
-    result = backtest(sigs)
+    sigs = generate_signals(test_feat, params, point_value=costs["point_value"])
+    result = backtest(
+        sigs,
+        point_value=costs["point_value"],
+        slippage_points=costs["slippage_points"],
+        commission_rt=costs["commission_rt"],
+    )
     metrics = compute_all_metrics(result, cache["num_test_days"])
     checks = check_acceptance(metrics)
 

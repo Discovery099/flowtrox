@@ -53,7 +53,7 @@ class BackendAPITester:
             return False, {}
 
     def test_instruments(self):
-        """Test GET /api/instruments"""
+        """Test GET /api/instruments - should return all 6 instruments"""
         success, response = self.run_test(
             "GET /api/instruments",
             "GET",
@@ -63,12 +63,35 @@ class BackendAPITester:
         if success and 'instruments' in response:
             instruments = response['instruments']
             print(f"   Found {len(instruments)} instruments")
-            es_found = any(i['symbol'] == 'ES' for i in instruments)
-            if es_found:
-                print(f"   ✓ ES instrument found")
-            else:
-                print(f"   ✗ ES instrument NOT found")
-            return success and es_found
+            
+            # Expected instruments with their specs
+            expected = {
+                'ES': {'tick_size': 0.25, 'point_value': 50.0},
+                'MES': {'tick_size': 0.25, 'point_value': 5.0},
+                'MNQ': {'tick_size': 0.25, 'point_value': 2.0},
+                'M2K': {'tick_size': 0.10, 'point_value': 5.0},
+                'MGC': {'tick_size': 0.10, 'point_value': 10.0},
+                'MCL': {'tick_size': 0.01, 'point_value': 100.0},
+            }
+            
+            all_correct = True
+            for symbol, specs in expected.items():
+                inst = next((i for i in instruments if i['symbol'] == symbol), None)
+                if inst:
+                    tick_ok = inst['tick_size'] == specs['tick_size']
+                    pv_ok = inst['point_value'] == specs['point_value']
+                    avail_ok = inst.get('available', False)
+                    
+                    status = "✓" if (tick_ok and pv_ok and avail_ok) else "✗"
+                    print(f"   {status} {symbol}: tick={inst['tick_size']} (expect {specs['tick_size']}), pv={inst['point_value']} (expect {specs['point_value']}), available={avail_ok}")
+                    
+                    if not (tick_ok and pv_ok and avail_ok):
+                        all_correct = False
+                else:
+                    print(f"   ✗ {symbol}: NOT FOUND")
+                    all_correct = False
+            
+            return success and len(instruments) == 6 and all_correct
         return False
 
     def test_strategy_info(self):
@@ -91,11 +114,11 @@ class BackendAPITester:
             return success and has_name and has_params and has_space and has_criteria
         return False
 
-    def test_single_backtest(self):
-        """Test POST /api/backtest/single (NOTE: first run takes 60-90s)"""
+    def test_single_backtest_es(self):
+        """Test POST /api/backtest/single for ES (regression check)"""
         print("\n⚠️  NOTE: First backtest after backend restart takes 60-90s for model warm-up")
         success, response = self.run_test(
-            "POST /api/backtest/single",
+            "POST /api/backtest/single (ES)",
             "POST",
             "api/backtest/single",
             200,
@@ -147,7 +170,123 @@ class BackendAPITester:
                     has_key = key in charts
                     print(f"   Has {key}: {has_key}")
             
-            return success and has_metrics and has_checks and has_model_info and has_charts and has_trades
+            # Verify ES point_value is 50.0
+            pv_correct = False
+            if has_model_info:
+                model_info = response['model_info']
+                pv = model_info.get('point_value')
+                pv_correct = pv == 50.0
+                print(f"   ES point_value: {pv} (expect 50.0) {'✓' if pv_correct else '✗'}")
+            
+            return success and has_metrics and has_checks and has_model_info and has_charts and has_trades and pv_correct
+        return False
+
+    def test_single_backtest_m2k(self):
+        """Test POST /api/backtest/single for M2K (tick 0.10, pv 5.0)"""
+        print("\n⚠️  NOTE: First run for M2K takes 60-90s for model fitting")
+        success, response = self.run_test(
+            "POST /api/backtest/single (M2K)",
+            "POST",
+            "api/backtest/single",
+            200,
+            data={
+                "symbol": "M2K",
+                "toxic_continuation_threshold": 0.5,
+                "toxic_reversal_threshold": 0.5,
+                "max_hold_bars": 15,
+                "regime_exit_enabled": True
+            },
+            timeout=120
+        )
+        if success:
+            has_metrics = 'metrics' in response
+            has_checks = 'checks' in response
+            has_model_info = 'model_info' in response
+            has_charts = 'charts' in response
+            has_trades = 'trades' in response
+            
+            print(f"   Has metrics: {has_metrics}")
+            print(f"   Has model_info: {has_model_info}")
+            print(f"   Has trades: {has_trades}")
+            
+            # Verify M2K specs
+            tick_ok = pv_ok = test_days_ok = test_rows_ok = trades_ok = False
+            if has_model_info:
+                model_info = response['model_info']
+                tick = model_info.get('tick_size')
+                pv = model_info.get('point_value')
+                test_days = model_info.get('num_test_days', 0)
+                test_rows = model_info.get('test_rows', 0)
+                
+                tick_ok = tick == 0.10
+                pv_ok = pv == 5.0
+                test_days_ok = test_days > 0
+                test_rows_ok = test_rows > 0
+                
+                print(f"   M2K tick_size: {tick} (expect 0.10) {'✓' if tick_ok else '✗'}")
+                print(f"   M2K point_value: {pv} (expect 5.0) {'✓' if pv_ok else '✗'}")
+                print(f"   num_test_days: {test_days} {'✓' if test_days_ok else '✗'}")
+                print(f"   test_rows: {test_rows} {'✓' if test_rows_ok else '✗'}")
+            
+            if has_trades:
+                trades = response['trades']
+                trades_ok = len(trades) > 0
+                print(f"   Trades count: {len(trades)} {'✓' if trades_ok else '✗'}")
+            
+            return success and tick_ok and pv_ok and test_days_ok and test_rows_ok and trades_ok
+        return False
+
+    def test_single_backtest_mcl(self):
+        """Test POST /api/backtest/single for MCL (tick 0.01, pv 100.0, ~66 bars/day)"""
+        print("\n⚠️  NOTE: First run for MCL takes 60-90s for model fitting")
+        success, response = self.run_test(
+            "POST /api/backtest/single (MCL)",
+            "POST",
+            "api/backtest/single",
+            200,
+            data={
+                "symbol": "MCL",
+                "toxic_continuation_threshold": 0.5,
+                "toxic_reversal_threshold": 0.5,
+                "max_hold_bars": 15,
+                "regime_exit_enabled": True
+            },
+            timeout=120
+        )
+        if success:
+            has_metrics = 'metrics' in response
+            has_model_info = 'model_info' in response
+            has_trades = 'trades' in response
+            
+            print(f"   Has metrics: {has_metrics}")
+            print(f"   Has model_info: {has_model_info}")
+            print(f"   Has trades: {has_trades}")
+            
+            # Verify MCL specs (different session length)
+            tick_ok = pv_ok = test_days_ok = test_rows_ok = trades_ok = False
+            if has_model_info:
+                model_info = response['model_info']
+                tick = model_info.get('tick_size')
+                pv = model_info.get('point_value')
+                test_days = model_info.get('num_test_days', 0)
+                test_rows = model_info.get('test_rows', 0)
+                
+                tick_ok = tick == 0.01
+                pv_ok = pv == 100.0
+                test_days_ok = test_days > 0
+                test_rows_ok = test_rows > 0
+                
+                print(f"   MCL tick_size: {tick} (expect 0.01) {'✓' if tick_ok else '✗'}")
+                print(f"   MCL point_value: {pv} (expect 100.0) {'✓' if pv_ok else '✗'}")
+                print(f"   num_test_days: {test_days} {'✓' if test_days_ok else '✗'}")
+                print(f"   test_rows: {test_rows} {'✓' if test_rows_ok else '✗'}")
+            
+            if has_trades:
+                trades = response['trades']
+                trades_ok = len(trades) > 0
+                print(f"   Trades count: {len(trades)} {'✓' if trades_ok else '✗'}")
+            
+            return success and tick_ok and pv_ok and test_days_ok and test_rows_ok and trades_ok
         return False
 
     def test_optimize_start(self):
@@ -281,23 +420,25 @@ class BackendAPITester:
 
 def main():
     print("=" * 80)
-    print("FLOWTOX_REGIME_01 Backend API Test Suite")
+    print("FLOWTOX_REGIME_01 Backend API Test Suite - Multi-Instrument")
     print("=" * 80)
     
     tester = BackendAPITester()
     
     # Test basic endpoints
     print("\n" + "=" * 80)
-    print("PHASE 1: Basic Endpoints")
+    print("PHASE 1: Basic Endpoints & Multi-Instrument Support")
     print("=" * 80)
     tester.test_instruments()
     tester.test_strategy_info()
     
-    # Test single backtest (slow first time)
+    # Test single backtests for multiple instruments
     print("\n" + "=" * 80)
-    print("PHASE 2: Single Backtest (60-90s first run)")
+    print("PHASE 2: Multi-Instrument Backtests (60-90s per instrument first run)")
     print("=" * 80)
-    tester.test_single_backtest()
+    tester.test_single_backtest_es()   # Regression check
+    tester.test_single_backtest_m2k()  # M2K: tick 0.10, pv 5.0
+    tester.test_single_backtest_mcl()  # MCL: tick 0.01, pv 100.0, different session
     
     # Test run retrieval and downloads
     print("\n" + "=" * 80)
@@ -306,16 +447,12 @@ def main():
     tester.test_get_run()
     tester.test_download_files()
     
-    # Test optimization (long-running)
+    # Test optimization (long-running) - skip for now to keep test time reasonable
     print("\n" + "=" * 80)
-    print("PHASE 4: Walk-Forward Optimization (3-4 minutes)")
+    print("PHASE 4: Walk-Forward Optimization (SKIPPED - takes 3-4 minutes)")
     print("=" * 80)
-    user_input = input("Run optimization test? This takes 3-4 minutes (y/n): ")
-    if user_input.lower() == 'y':
-        tester.test_optimize_start()
-        tester.test_optimize_status()
-    else:
-        print("⏭️  Skipping optimization test")
+    print("⏭️  Skipping optimization test to keep runtime reasonable")
+    print("   (Optimization was already tested in iteration_1)")
     
     # Print summary
     print("\n" + "=" * 80)

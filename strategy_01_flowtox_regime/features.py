@@ -82,33 +82,40 @@ def compute_parkinson_bar_variance(df: pd.DataFrame) -> pd.Series:
 # ---------------------------------------------------------------------------
 def compute_parkinson_realized_variances(
     df: pd.DataFrame, parkinson_bar: pd.Series
-) -> pd.DataFrame:
+):
     """Compute daily, weekly, and monthly Parkinson realized variances (Spec 2.5).
 
-    Daily RV = sum of per-bar Parkinson variance within each 78-bar day.
-    Weekly/Monthly RV = 5/22-day rolling means of daily RV, broadcast back to
-    every bar within the day.
+    Days are grouped by the bar's actual (UTC) calendar date rather than a fixed
+    bars-per-day count, so the aggregation is correct for any session length
+    (ES/MES/MNQ/M2K = 78 bars, MGC ~62, MCL ~66).
+
+    Returns ``(per_bar_df, daily_df)`` where ``per_bar_df`` has rv_1d/rv_1w/rv_1m
+    broadcast to every bar and ``daily_df`` is indexed by date (one row per day).
     """
-    # Positional day id: every BARS_PER_DAY consecutive bars form one day.
-    day_id = pd.Series(np.arange(len(df)) // BARS_PER_DAY, index=df.index)
-
+    date_series = pd.Series(df["ts_event"].dt.date.values, index=df.index)
     pbar = pd.Series(parkinson_bar.values, index=df.index)
-    daily_rv = pbar.groupby(day_id).sum()
 
+    daily_rv = pbar.groupby(date_series).sum().sort_index()
     weekly_rv = daily_rv.rolling(window=HAR_WEEKLY_WINDOW, min_periods=1).mean()
     monthly_rv = daily_rv.rolling(window=HAR_MONTHLY_WINDOW, min_periods=1).mean()
 
-    rv_1d = day_id.map(daily_rv)
-    rv_1w = day_id.map(weekly_rv)
-    rv_1m = day_id.map(monthly_rv)
+    daily_df = pd.DataFrame(
+        {"rv_1d": daily_rv, "rv_1w": weekly_rv, "rv_1m": monthly_rv}
+    )
 
-    result = pd.DataFrame({"rv_1d": rv_1d, "rv_1w": rv_1w, "rv_1m": rv_1m}, index=df.index)
-    result = result.ffill().bfill()
-    result = result.fillna(float(result["rv_1d"].mean()))
+    rv_1d = date_series.map(daily_rv)
+    rv_1w = date_series.map(weekly_rv)
+    rv_1m = date_series.map(monthly_rv)
+
+    per_bar = pd.DataFrame(
+        {"rv_1d": rv_1d, "rv_1w": rv_1w, "rv_1m": rv_1m}, index=df.index
+    )
+    per_bar = per_bar.ffill().bfill()
+    per_bar = per_bar.fillna(float(per_bar["rv_1d"].mean()))
 
     for col in ["rv_1d", "rv_1w", "rv_1m"]:
-        assert (result[col] >= 0).all(), f"Negative values in {col}"
-    return result
+        assert (per_bar[col] >= 0).all(), f"Negative values in {col}"
+    return per_bar, daily_df
 
 
 # ---------------------------------------------------------------------------
@@ -189,13 +196,15 @@ def engineer_features(
     )
     result["parkinson_bar_variance"] = compute_parkinson_bar_variance(result)
 
-    # 2.5 realized variances
-    rv_df = compute_parkinson_realized_variances(result, result["parkinson_bar_variance"])
+    # 2.5 realized variances (grouped by actual date; instrument-agnostic)
+    rv_df, daily_rv = compute_parkinson_realized_variances(
+        result, result["parkinson_bar_variance"]
+    )
     result = pd.concat([result, rv_df], axis=1)
 
     # 2.6 HAR forecast
     if fit_models:
-        har_params = fit_har_model(result["rv_1d"], result["rv_1w"], result["rv_1m"])
+        har_params = fit_har_model(daily_rv)
         fitted["har_params"] = har_params
     result["har_vol_forecast"] = compute_har_vol_forecast(
         result["rv_1d"], result["rv_1w"], result["rv_1m"], har_params

@@ -1,0 +1,48 @@
+{
+  "summary": "Completed multi-instrument support testing for FLOWTOX_REGIME_01. Verified all 6 instruments (ES, MES, MNQ, M2K, MGC, MCL) are correctly registered with proper contract specs. Backend API tests confirm M2K (tick 0.10, pv 5.0) and MCL (tick 0.01, pv 100.0) backtests work correctly with populated model_info fields. Frontend UI successfully displays all 6 instruments in selector, runs backtests for M2K and ES, and renders charts. ES regression check passed. No regressions detected.",
+  
+  "backend_issues": {
+    "critical_bugs": [],
+    "flaky_endpoints": []
+  },
+  
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  
+  "passed_tests": [
+    "Backend: GET /api/instruments returns all 6 instruments (ES, MES, MNQ, M2K, MGC, MCL) with correct tick_size and point_value",
+    "Backend: M2K single backtest (tick 0.10, pv 5.0, 480 test days, 36686 rows, 1987 trades)",
+    "Backend: MCL single backtest (tick 0.01, pv 100.0, 361 test days, 23710 rows, 1519 trades)",
+    "Backend: ES single backtest regression (tick 0.25, pv 50.0, 480 test days, 36688 rows, 1960 trades)",
+    "Backend: model_info.num_test_days and test_rows populated for all instruments",
+    "Frontend: Instrument selector displays all 6 instruments correctly",
+    "Frontend: M2K backtest runs successfully and populates Overview metrics",
+    "Frontend: Charts tab renders equity curve and other charts for M2K",
+    "Frontend: ES backtest works (regression check passed)",
+    "Frontend: Model tab is accessible and clickable"
+  ],
+  
+  "test_report_links": [
+    "/app/backend_test.py",
+    "/app/.screenshots/m2k_results.png",
+    "/app/.screenshots/es_results.png",
+    "/app/.screenshots/m2k_charts.png"
+  ],
+  
+  "success_percentage": {
+    "backend": "100% (8/8 tests passed)",
+    "frontend": "100% (6/6 tests passed)"
+  },
+  
+  "updated_files": [
+    "/app/backend_test.py"
+  ],
+  
+  "action_item_for_main_agent": "",
+  
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_test_itself": false
+}

@@ -89,8 +89,11 @@ def split_train_test(
     return train_df, test_df
 
 
-def validate_data(df: pd.DataFrame) -> None:
-    """Run data validation assertions (Spec 1.7). Raises ValueError on failure."""
+def validate_data(df: pd.DataFrame, tick_size: float = 0.25) -> None:
+    """Run data validation assertions (Spec 1.7). Raises ValueError on failure.
+
+    ``tick_size`` is instrument-specific (ES/MES/MNQ=0.25, M2K/MGC=0.10, MCL=0.01).
+    """
     for col in ["open", "high", "low", "close", "volume"]:
         if df[col].isnull().any():
             raise ValueError(f"NaN found in {col}")
@@ -116,6 +119,6 @@ def validate_data(df: pd.DataFrame) -> None:
     n = len(df)
     sample_idx = rng.choice(n, size=min(1000, n), replace=False)
     closes = df["close"].values[sample_idx]
-    remainder = np.abs(np.round(closes / 0.25) * 0.25 - closes)
+    remainder = np.abs(np.round(closes / tick_size) * tick_size - closes)
     if (remainder > 1e-6).any():
-        raise ValueError("Price not a multiple of tick size (0.25)")
+        raise ValueError(f"Price not a multiple of tick size ({tick_size})")

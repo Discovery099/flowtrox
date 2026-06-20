@@ -19,7 +19,7 @@ const ParamRow = ({ label, sym, testid, value, min, max, step, onChange, decimal
   <div className="space-y-2">
     <div className="flex items-center justify-between">
       <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
-        {label} <span className="text-[hsl(var(--info))]">{sym}</span>
+        {label} <span className="normal-case text-[hsl(var(--info))]">{sym}</span>
       </Label>
       <Input
         data-testid={`${testid}-input`}

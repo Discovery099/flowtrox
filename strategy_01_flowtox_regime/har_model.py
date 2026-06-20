@@ -6,18 +6,16 @@ import pandas as pd
 from .config import BARS_PER_DAY
 
 
-def fit_har_model(rv_1d: pd.Series, rv_1w: pd.Series, rv_1m: pd.Series) -> dict:
-    """Fit HAR-RV model via OLS on training data (Spec 2.6).
+def fit_har_model(daily_rv: pd.DataFrame) -> dict:
+    """Fit HAR-RV model via OLS on daily-level training data (Spec 2.6).
 
-    Target: RV_1D[t+1] (next day's realized variance).
-    Features: [1, RV_1D[t], RV_1W[t], RV_1M[t]] at the daily level.
+    ``daily_rv`` is indexed by calendar date with columns rv_1d/rv_1w/rv_1m
+    (one row per trading day). Target is next day's RV_1D. Grouping by actual
+    date (instead of assuming a fixed bars-per-day) makes the model correct for
+    instruments with different session lengths (e.g. gold, crude).
     Returns dict with keys: intercept, beta_d, beta_w, beta_m, r_squared.
     """
-    daily_data = pd.DataFrame({
-        "rv_1d": rv_1d.iloc[::BARS_PER_DAY].reset_index(drop=True),
-        "rv_1w": rv_1w.iloc[::BARS_PER_DAY].reset_index(drop=True),
-        "rv_1m": rv_1m.iloc[::BARS_PER_DAY].reset_index(drop=True),
-    }).dropna()
+    daily_data = daily_rv[["rv_1d", "rv_1w", "rv_1m"]].dropna().sort_index()
 
     # Target: next day's RV.
     y = daily_data["rv_1d"].shift(-1).dropna()

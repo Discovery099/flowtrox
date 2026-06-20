@@ -59,6 +59,7 @@ def run_walk_forward_optimization(
     train_df: pd.DataFrame,
     progress_cb: Optional[Callable[[dict], None]] = None,
     hmm_n_init: int = 3,
+    costs: Optional[dict] = None,
 ) -> dict:
     """Optimize the 3 parameters (tau1, tau2, N) via walk-forward analysis.
 
@@ -106,11 +107,16 @@ def run_walk_forward_optimization(
     best_score = -np.inf
     combo_scores = []
 
+    costs = costs or {}
+    pv = costs.get("point_value", 50.0)
+    slip = costs.get("slippage_points", 0.25)
+    comm = costs.get("commission_rt", 2.50)
+
     for ci, params in enumerate(grid):
         window_sharpes = []
         for (w_test_feat, n_days) in window_feats:
-            sigs = generate_signals(w_test_feat, params)
-            res = backtest(sigs)
+            sigs = generate_signals(w_test_feat, params, point_value=pv)
+            res = backtest(sigs, point_value=pv, slippage_points=slip, commission_rt=comm)
             tl = res["trade_log"]
             if len(tl) >= MIN_TRADES_PER_WINDOW:
                 wr = compute_win_rate(tl)
