@@ -418,41 +418,255 @@ class BackendAPITester:
         
         return all_success
 
+    def test_pine_script(self):
+        """Test GET /api/pine-script - should return text/plain starting with '//@version=6'"""
+        url = f"{self.base_url}/api/pine-script"
+        self.tests_run += 1
+        print(f"\n🔍 Testing GET /api/pine-script...")
+        print(f"   URL: {url}")
+        
+        try:
+            response = requests.get(url, timeout=10)
+            success = response.status_code == 200
+            
+            if success:
+                self.tests_passed += 1
+                print(f"✅ Passed - Status: {response.status_code}")
+                
+                # Check content type
+                content_type = response.headers.get('content-type', '')
+                is_text = 'text/plain' in content_type
+                print(f"   Content-Type: {content_type} {'✓' if is_text else '✗'}")
+                
+                # Check content starts with '//@version=6'
+                text = response.text
+                starts_correct = text.startswith('//@version=6')
+                print(f"   Starts with '//@version=6': {starts_correct} {'✓' if starts_correct else '✗'}")
+                print(f"   First 100 chars: {text[:100]}")
+                
+                return success and is_text and starts_correct
+            else:
+                print(f"❌ Failed - Expected 200, got {response.status_code}")
+                return False
+                
+        except Exception as e:
+            print(f"❌ Failed - Error: {str(e)}")
+            return False
+
+    def test_drawdown_anchored(self):
+        """Test drawdown_method='anchored' - should return both drawdown values, max_drawdown == max_drawdown_anchored"""
+        print("\n⚠️  NOTE: Testing dual drawdown with method='anchored'")
+        success, response = self.run_test(
+            "POST /api/backtest/single (drawdown_method=anchored)",
+            "POST",
+            "api/backtest/single",
+            200,
+            data={
+                "symbol": "ES",
+                "toxic_continuation_threshold": 0.55,
+                "toxic_reversal_threshold": 0.55,
+                "max_hold_bars": 15,
+                "regime_exit_enabled": True,
+                "drawdown_method": "anchored"
+            },
+            timeout=120
+        )
+        
+        if success and 'metrics' in response:
+            metrics = response['metrics']
+            
+            # Check both drawdown values are present
+            has_anchored = 'max_drawdown_anchored' in metrics
+            has_spec = 'max_drawdown_spec' in metrics
+            has_method = 'drawdown_method' in metrics
+            has_max_dd = 'max_drawdown' in metrics
+            
+            print(f"   Has max_drawdown_anchored: {has_anchored}")
+            print(f"   Has max_drawdown_spec: {has_spec}")
+            print(f"   Has drawdown_method: {has_method}")
+            print(f"   Has max_drawdown: {has_max_dd}")
+            
+            if has_anchored and has_spec and has_method and has_max_dd:
+                anchored = metrics['max_drawdown_anchored']
+                spec = metrics['max_drawdown_spec']
+                method = metrics['drawdown_method']
+                max_dd = metrics['max_drawdown']
+                
+                print(f"   max_drawdown_anchored: {anchored}")
+                print(f"   max_drawdown_spec: {spec}")
+                print(f"   drawdown_method: {method}")
+                print(f"   max_drawdown: {max_dd}")
+                
+                # Verify method is 'anchored'
+                method_correct = method == 'anchored'
+                print(f"   drawdown_method == 'anchored': {method_correct} {'✓' if method_correct else '✗'}")
+                
+                # Verify max_drawdown == max_drawdown_anchored
+                max_dd_correct = abs(max_dd - anchored) < 0.0001
+                print(f"   max_drawdown == max_drawdown_anchored: {max_dd_correct} {'✓' if max_dd_correct else '✗'}")
+                
+                # Verify anchored and spec are different (they should be)
+                different = abs(anchored - spec) > 0.001
+                print(f"   anchored != spec: {different} {'✓' if different else '✗'}")
+                
+                return success and method_correct and max_dd_correct and different
+            
+        return False
+
+    def test_drawdown_spec(self):
+        """Test drawdown_method='spec' - should return max_drawdown == max_drawdown_spec (different from anchored)"""
+        print("\n⚠️  NOTE: Testing dual drawdown with method='spec'")
+        success, response = self.run_test(
+            "POST /api/backtest/single (drawdown_method=spec)",
+            "POST",
+            "api/backtest/single",
+            200,
+            data={
+                "symbol": "ES",
+                "toxic_continuation_threshold": 0.55,
+                "toxic_reversal_threshold": 0.55,
+                "max_hold_bars": 15,
+                "regime_exit_enabled": True,
+                "drawdown_method": "spec"
+            },
+            timeout=120
+        )
+        
+        if success and 'metrics' in response:
+            metrics = response['metrics']
+            
+            has_anchored = 'max_drawdown_anchored' in metrics
+            has_spec = 'max_drawdown_spec' in metrics
+            has_method = 'drawdown_method' in metrics
+            has_max_dd = 'max_drawdown' in metrics
+            
+            if has_anchored and has_spec and has_method and has_max_dd:
+                anchored = metrics['max_drawdown_anchored']
+                spec = metrics['max_drawdown_spec']
+                method = metrics['drawdown_method']
+                max_dd = metrics['max_drawdown']
+                
+                print(f"   max_drawdown_anchored: {anchored}")
+                print(f"   max_drawdown_spec: {spec}")
+                print(f"   drawdown_method: {method}")
+                print(f"   max_drawdown: {max_dd}")
+                
+                # Verify method is 'spec'
+                method_correct = method == 'spec'
+                print(f"   drawdown_method == 'spec': {method_correct} {'✓' if method_correct else '✗'}")
+                
+                # Verify max_drawdown == max_drawdown_spec
+                max_dd_correct = abs(max_dd - spec) < 0.0001
+                print(f"   max_drawdown == max_drawdown_spec: {max_dd_correct} {'✓' if max_dd_correct else '✗'}")
+                
+                # Verify anchored and spec are different
+                different = abs(anchored - spec) > 0.001
+                print(f"   anchored != spec: {different} {'✓' if different else '✗'}")
+                
+                return success and method_correct and max_dd_correct and different
+            
+        return False
+
+    def test_diagnostics_single(self):
+        """Test single backtest diagnostics - should have PSR, sharpe_ci_low, sharpe_ci_high, bootstrap_p_value"""
+        print("\n⚠️  NOTE: Testing robustness diagnostics for single backtest")
+        success, response = self.run_test(
+            "POST /api/backtest/single (diagnostics check)",
+            "POST",
+            "api/backtest/single",
+            200,
+            data={
+                "symbol": "ES",
+                "toxic_continuation_threshold": 0.55,
+                "toxic_reversal_threshold": 0.55,
+                "max_hold_bars": 15,
+                "regime_exit_enabled": True,
+                "drawdown_method": "anchored"
+            },
+            timeout=120
+        )
+        
+        if success and 'diagnostics' in response:
+            diag = response['diagnostics']
+            
+            # Check required fields for single backtest
+            has_psr = 'psr' in diag
+            has_ci_low = 'sharpe_ci_low' in diag
+            has_ci_high = 'sharpe_ci_high' in diag
+            has_boot_p = 'bootstrap_p_value' in diag
+            
+            print(f"   Has psr: {has_psr}")
+            print(f"   Has sharpe_ci_low: {has_ci_low}")
+            print(f"   Has sharpe_ci_high: {has_ci_high}")
+            print(f"   Has bootstrap_p_value: {has_boot_p}")
+            
+            if has_psr and has_ci_low and has_ci_high and has_boot_p:
+                psr = diag['psr']
+                ci_low = diag['sharpe_ci_low']
+                ci_high = diag['sharpe_ci_high']
+                boot_p = diag['bootstrap_p_value']
+                
+                print(f"   psr: {psr}")
+                print(f"   sharpe_ci_low: {ci_low}")
+                print(f"   sharpe_ci_high: {ci_high}")
+                print(f"   bootstrap_p_value: {boot_p}")
+                
+                # Verify values are numeric (not null)
+                psr_ok = psr is not None and isinstance(psr, (int, float))
+                ci_low_ok = ci_low is not None and isinstance(ci_low, (int, float))
+                ci_high_ok = ci_high is not None and isinstance(ci_high, (int, float))
+                boot_p_ok = boot_p is not None and isinstance(boot_p, (int, float))
+                
+                print(f"   psr is numeric: {psr_ok} {'✓' if psr_ok else '✗'}")
+                print(f"   sharpe_ci_low is numeric: {ci_low_ok} {'✓' if ci_low_ok else '✗'}")
+                print(f"   sharpe_ci_high is numeric: {ci_high_ok} {'✓' if ci_high_ok else '✗'}")
+                print(f"   bootstrap_p_value is numeric: {boot_p_ok} {'✓' if boot_p_ok else '✗'}")
+                
+                # Check PBO/DSR should be null for single runs
+                pbo = diag.get('pbo')
+                dsr = diag.get('dsr')
+                print(f"   pbo (should be null for single): {pbo}")
+                print(f"   dsr (should be null for single): {dsr}")
+                
+                return success and psr_ok and ci_low_ok and ci_high_ok and boot_p_ok
+            
+        return False
+
 def main():
     print("=" * 80)
-    print("FLOWTOX_REGIME_01 Backend API Test Suite - Multi-Instrument")
+    print("FLOWTOX_REGIME_01 Backend API Test Suite - NEW FEATURES")
     print("=" * 80)
     
     tester = BackendAPITester()
     
-    # Test basic endpoints
+    # Test NEW features
     print("\n" + "=" * 80)
-    print("PHASE 1: Basic Endpoints & Multi-Instrument Support")
+    print("PHASE 1: NEW FEATURES - Pine Script & Dual Drawdown & Diagnostics")
+    print("=" * 80)
+    tester.test_pine_script()
+    tester.test_drawdown_anchored()
+    tester.test_drawdown_spec()
+    tester.test_diagnostics_single()
+    
+    # Test basic endpoints (regression)
+    print("\n" + "=" * 80)
+    print("PHASE 2: REGRESSION - Basic Endpoints")
     print("=" * 80)
     tester.test_instruments()
     tester.test_strategy_info()
     
-    # Test single backtests for multiple instruments
+    # Test single backtests (regression)
     print("\n" + "=" * 80)
-    print("PHASE 2: Multi-Instrument Backtests (60-90s per instrument first run)")
+    print("PHASE 3: REGRESSION - Single Backtest (ES)")
     print("=" * 80)
-    tester.test_single_backtest_es()   # Regression check
-    tester.test_single_backtest_m2k()  # M2K: tick 0.10, pv 5.0
-    tester.test_single_backtest_mcl()  # MCL: tick 0.01, pv 100.0, different session
+    tester.test_single_backtest_es()
     
     # Test run retrieval and downloads
     print("\n" + "=" * 80)
-    print("PHASE 3: Run Retrieval & Downloads")
+    print("PHASE 4: Run Retrieval & Downloads")
     print("=" * 80)
     tester.test_get_run()
     tester.test_download_files()
-    
-    # Test optimization (long-running) - skip for now to keep test time reasonable
-    print("\n" + "=" * 80)
-    print("PHASE 4: Walk-Forward Optimization (SKIPPED - takes 3-4 minutes)")
-    print("=" * 80)
-    print("⏭️  Skipping optimization test to keep runtime reasonable")
-    print("   (Optimization was already tested in iteration_1)")
     
     # Print summary
     print("\n" + "=" * 80)

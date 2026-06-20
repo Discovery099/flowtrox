@@ -14,6 +14,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { pineScriptUrl } from "@/lib/api";
+import { FileCode2 } from "lucide-react";
 
 const ParamRow = ({ label, sym, testid, value, min, max, step, onChange, decimals = 2 }) => (
   <div className="space-y-2">
@@ -149,6 +151,36 @@ export const RunPanel = ({
             disabled={busy}
           />
         </div>
+
+        <div className="rounded-md border border-[hsl(var(--hairline))] bg-[hsl(var(--surface-0))] px-3 py-2">
+          <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            Drawdown Method
+          </Label>
+          <div className="mt-2 grid grid-cols-2 gap-1">
+            {[
+              { k: "anchored", t: "Anchored" },
+              { k: "spec", t: "Spec-exact" },
+            ].map((o) => (
+              <button
+                key={o.k}
+                data-testid={`run-panel-dd-${o.k}`}
+                disabled={busy}
+                onClick={() => set("drawdown_method", o.k)}
+                className={`rounded px-2 py-1 font-mono text-[11px] transition-colors ${
+                  (params.drawdown_method || "anchored") === o.k
+                    ? "bg-[hsl(var(--info)/0.15)] text-[hsl(var(--info))] ring-1 ring-[hsl(var(--info)/0.4)]"
+                    : "text-muted-foreground hover:bg-[hsl(var(--muted))]"
+                }`}
+              >
+                {o.t}
+              </button>
+            ))}
+          </div>
+          <p className="mt-1.5 text-[10px] leading-snug text-muted-foreground">
+            Anchored = drawdown vs. account equity. Spec-exact = literal spec
+            formula on raw cumulative P&amp;L.
+          </p>
+        </div>
       </div>
 
       <Separator className="my-4 bg-[hsl(var(--hairline))]" />
@@ -187,6 +219,17 @@ export const RunPanel = ({
           the training set (several minutes) then freezes the best params for an
           out-of-sample test.
         </p>
+
+        <Button
+          data-testid="run-panel-pine-download"
+          variant="outline"
+          asChild
+          className="mt-1 w-full gap-2 border-[hsl(var(--hairline))] text-muted-foreground hover:text-foreground"
+        >
+          <a href={pineScriptUrl()} download>
+            <FileCode2 className="h-4 w-4" /> Download Pine Script
+          </a>
+        </Button>
       </div>
     </Card>
   );

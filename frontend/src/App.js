@@ -17,6 +17,7 @@ import { RunPanel } from "@/components/RunPanel";
 import { ProgressConsole } from "@/components/ProgressConsole";
 import { AcceptanceScorecard } from "@/components/AcceptanceScorecard";
 import { MetricsGrid } from "@/components/MetricsGrid";
+import { RobustnessPanel } from "@/components/RobustnessPanel";
 import { ModelInfo } from "@/components/ModelInfo";
 import { TradeTable } from "@/components/TradeTable";
 import { SensitivityHeatmap } from "@/components/SensitivityHeatmap";
@@ -34,6 +35,7 @@ const DEFAULT_PARAMS = {
   toxic_reversal_threshold: 0.55,
   max_hold_bars: 15,
   regime_exit_enabled: true,
+  drawdown_method: "anchored",
 };
 
 export default function App() {
@@ -103,7 +105,7 @@ export default function App() {
       setJobPct(0);
       setBestScore(null);
       setJobEvents([{ ts: new Date().toISOString(), stage: "queued", message: `Starting walk-forward optimization on ${symbol}\u2026`, pct: 0 }]);
-      const { job_id } = await startOptimize(symbol);
+      const { job_id } = await startOptimize(symbol, params.drawdown_method || "anchored");
       setJobId(job_id);
       toast.info("Walk-forward optimization started (several minutes)");
 
@@ -137,7 +139,7 @@ export default function App() {
       setJobStatus("failed");
       toast.error(`Could not start optimization: ${msg}`);
     }
-  }, [symbol]);
+  }, [symbol, params.drawdown_method]);
 
   useEffect(() => stopPolling, []);
 
@@ -150,6 +152,7 @@ export default function App() {
   const checks = result?.checks || null;
   const charts = result?.charts || {};
   const modelInfo = result?.model_info || null;
+  const diagnostics = result?.diagnostics || null;
   const bestParams = result?.best_params || (result ? result.params : null);
   const walkForward = result?.walk_forward_sharpe !== undefined
     ? { sharpe: result.walk_forward_sharpe, windows: result.n_windows }
@@ -201,6 +204,7 @@ export default function App() {
             <TabsContent value="overview" className="space-y-3">
               <AcceptanceScorecard checks={checks} metrics={metrics} />
               <MetricsGrid metrics={metrics} />
+              <RobustnessPanel diagnostics={diagnostics} />
               <EquityChart data={charts.equity_series} />
             </TabsContent>
 

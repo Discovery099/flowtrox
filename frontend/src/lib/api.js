@@ -10,10 +10,11 @@ export const getStrategyInfo = () => client.get("/strategy/info").then((r) => r.
 export const getModelStatus = (symbol) =>
   client.get(`/model/status`, { params: { symbol } }).then((r) => r.data);
 export const runSingle = (body) => client.post("/backtest/single", body).then((r) => r.data);
-export const startOptimize = (symbol) =>
-  client.post("/optimize/start", { symbol }).then((r) => r.data);
+export const startOptimize = (symbol, drawdownMethod = "anchored") =>
+  client.post("/optimize/start", { symbol, drawdown_method: drawdownMethod }).then((r) => r.data);
 export const getJobStatus = (jobId) =>
   client.get(`/optimize/status/${jobId}`).then((r) => r.data);
 export const downloadUrl = (runId, kind) => `${API}/runs/${runId}/download/${kind}`;
+export const pineScriptUrl = () => `${API}/pine-script`;
 
 export default client;

@@ -112,23 +112,31 @@ def run_walk_forward_optimization(
     slip = costs.get("slippage_points", 0.25)
     comm = costs.get("commission_rt", 2.50)
 
+    matrix_rows = []  # raw per-window Sharpe for every combo (for PBO/CSCV)
+    trial_sharpes = []  # avg test Sharpe per combo (for Deflated Sharpe)
+
     for ci, params in enumerate(grid):
         window_sharpes = []
+        raw_sharpes = []
         for (w_test_feat, n_days) in window_feats:
             sigs = generate_signals(w_test_feat, params, point_value=pv)
             res = backtest(sigs, point_value=pv, slippage_points=slip, commission_rt=comm)
             tl = res["trade_log"]
+            raw = compute_sharpe(res["daily_returns"])
+            raw_sharpes.append(float(raw))
             if len(tl) >= MIN_TRADES_PER_WINDOW:
                 wr = compute_win_rate(tl)
                 if wr >= MIN_WIN_RATE:
-                    window_sharpes.append(compute_sharpe(res["daily_returns"]))
+                    window_sharpes.append(raw)
                 else:
                     window_sharpes.append(REJECT_SCORE)
             else:
                 window_sharpes.append(REJECT_SCORE)
 
+        matrix_rows.append(raw_sharpes)
         valid = [s for s in window_sharpes if s > -900]
         avg_sharpe = float(np.mean(valid)) if valid else REJECT_SCORE
+        trial_sharpes.append(float(np.mean(raw_sharpes)))
         combo_scores.append({
             "toxic_continuation_threshold": params["toxic_continuation_threshold"],
             "toxic_reversal_threshold": params["toxic_reversal_threshold"],
@@ -158,10 +166,15 @@ def run_walk_forward_optimization(
         }
         best_score = REJECT_SCORE
 
+    # window_combo_matrix: shape (S windows, C combos) for CSCV/PBO.
+    window_combo_matrix = np.asarray(matrix_rows, dtype=float).T.tolist() if matrix_rows else []
+
     return {
         "best_params": best_params,
         "best_score": float(best_score),
         "combo_scores": combo_scores,
         "n_windows": len(windows),
         "n_combos": total,
+        "window_combo_matrix": window_combo_matrix,
+        "trial_sharpes": trial_sharpes,
     }

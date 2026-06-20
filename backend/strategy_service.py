@@ -298,13 +298,14 @@ def _jsonify_metrics(metrics: dict) -> dict:
 # ---------------------------------------------------------------------------
 # Single backtest
 # ---------------------------------------------------------------------------
-def run_single(symbol: str, params: dict) -> dict:
+def run_single(symbol: str, params: dict, drawdown_method: str = "anchored") -> dict:
     """Run a single backtest on the test set with the given params."""
     cache = ensure_models(symbol)
     from strategy_01_flowtox_regime.signal_generator import generate_signals
     from strategy_01_flowtox_regime.backtest import backtest
     from strategy_01_flowtox_regime.metrics import compute_all_metrics, check_acceptance
     from strategy_01_flowtox_regime.pipeline import costs_from_inst
+    from strategy_01_flowtox_regime.diagnostics import compute_diagnostics
 
     costs = costs_from_inst(cache["inst"])
     test_feat = cache["test_feat"]
@@ -315,8 +316,9 @@ def run_single(symbol: str, params: dict) -> dict:
         slippage_points=costs["slippage_points"],
         commission_rt=costs["commission_rt"],
     )
-    metrics = compute_all_metrics(result, cache["num_test_days"])
+    metrics = compute_all_metrics(result, cache["num_test_days"], drawdown_method=drawdown_method)
     checks = check_acceptance(metrics)
+    diagnostics = compute_diagnostics(result["daily_returns"].values)
 
     run_id = str(uuid.uuid4())
     _persist_run(run_id, params, metrics, result)
@@ -334,6 +336,7 @@ def run_single(symbol: str, params: dict) -> dict:
         "model_info": cache["model_info"],
         "charts": charts,
         "trades": trades,
+        "diagnostics": diagnostics,
         "created_at": _now_iso(),
     }
     _RUNS[run_id] = {"payload": payload}
@@ -343,11 +346,12 @@ def run_single(symbol: str, params: dict) -> dict:
 # ---------------------------------------------------------------------------
 # Walk-forward optimization (background job)
 # ---------------------------------------------------------------------------
-def start_optimization(symbol: str) -> str:
+def start_optimization(symbol: str, drawdown_method: str = "anchored") -> str:
     job_id = str(uuid.uuid4())
     _JOBS[job_id] = {
         "job_id": job_id,
         "symbol": symbol.upper(),
+        "drawdown_method": drawdown_method,
         "status": "queued",
         "pct": 0,
         "events": [{"ts": _now_iso(), "stage": "queued", "message": "Job queued", "pct": 0}],
@@ -377,7 +381,8 @@ def _run_optimization_job(job_id: str) -> None:
 
     try:
         symbol = job["symbol"]
-        results = run_full_pipeline(symbol, progress_cb=progress_cb)
+        results = run_full_pipeline(symbol, progress_cb=progress_cb,
+                                    drawdown_method=job.get("drawdown_method", "anchored"))
 
         metrics = results["metrics"]
         checks = results["checks"]
@@ -426,6 +431,7 @@ def _run_optimization_job(job_id: str) -> None:
             "charts": charts,
             "trades": trades,
             "sensitivity": sens,
+            "diagnostics": results.get("diagnostics", {}),
             "created_at": _now_iso(),
         }
         _RUNS[run_id] = {"payload": payload}

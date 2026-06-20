@@ -1,18 +1,30 @@
 [
   {
-    "content": "Register MES/MNQ/M2K/MGC/MCL with correct contract specs",
+    "content": "Engine: spec-exact drawdown toggle (both exposed)",
     "status": "completed"
   },
   {
-    "content": "Refactor engine: date-based RV + per-instrument cost threading + tick-size validation",
+    "content": "Engine: diagnostics module (PSR, Deflated Sharpe, PBO/CSCV, bootstrap CI)",
     "status": "completed"
   },
   {
-    "content": "Validate all 6 instruments end-to-end",
+    "content": "Validation: capture window×combo matrix + trial sharpes",
     "status": "completed"
   },
   {
-    "content": "Focused testing_agent_v3 pass on multi-instrument (10/10 passed)",
+    "content": "Pipeline/service: diagnostics + drawdown_method threading",
     "status": "completed"
+  },
+  {
+    "content": "Backend: drawdown_method params + Pine download endpoint",
+    "status": "completed"
+  },
+  {
+    "content": "Frontend: dual drawdown, Robustness panel, dd toggle, Pine button",
+    "status": "completed"
+  },
+  {
+    "content": "Validate via optimization run (PBO 0.43 / DSR 0.057 confirmed) + testing agent",
+    "status": "in_progress"
   }
 ]

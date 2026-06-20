@@ -16,15 +16,25 @@ def compute_sharpe(daily_returns: pd.Series, risk_free_rate: float = 0.0) -> flo
     return float(np.sqrt(252) * excess.mean() / sd)
 
 
-def compute_max_drawdown(equity_curve: pd.Series) -> float:
+def compute_max_drawdown(equity_curve: pd.Series, method: str = "anchored") -> float:
     """Maximum drawdown as a fraction of peak equity (Spec 5.4.2).
 
-    The raw equity curve is cumulative P&L starting near 0, which makes a naive
-    peak-relative drawdown unstable. We anchor the curve to the reference
-    account value so drawdown is expressed as a fraction of account equity.
+    method="anchored" (default): anchor the cumulative-P&L curve to the reference
+        account value before computing peak-relative drawdown. The raw curve
+        starts near 0, which makes the literal spec formula unstable.
+    method="spec": the literal spec formula (running_peak - equity)/running_peak
+        on the raw cumulative-P&L equity curve, for exact spec fidelity.
     """
     if len(equity_curve) == 0:
         return 0.0
+    if method == "spec":
+        equity = equity_curve.astype(float)
+        running_peak = equity.cummax()
+        # Guard divide-by-zero / sign issues on a near-zero starting curve.
+        denom = running_peak.replace(0.0, np.nan)
+        drawdown = (running_peak - equity) / denom
+        mdd = drawdown.max()
+        return float(mdd) if not np.isnan(mdd) else 0.0
     equity = equity_curve.astype(float) + 100_000.0  # anchor to account value
     running_peak = equity.cummax()
     drawdown = (running_peak - equity) / running_peak
@@ -100,15 +110,25 @@ def win_rate_significance_test(trade_log: pd.DataFrame, target_rate: float = 0.5
     return float(t_stat), p_value, bool(p_value < 0.05)
 
 
-def compute_all_metrics(test_result: dict, num_test_days: int) -> dict:
-    """Compute the full metric suite + statistical tests for a backtest result."""
+def compute_all_metrics(test_result: dict, num_test_days: int, drawdown_method: str = "anchored") -> dict:
+    """Compute the full metric suite + statistical tests for a backtest result.
+
+    ``drawdown_method`` ("anchored" or "spec") selects which max-drawdown drives
+    the acceptance criterion; both values are always reported.
+    """
     tl = test_result["trade_log"]
     dr = test_result["daily_returns"]
     eq = test_result["equity_curve"]
 
     metrics = {}
     metrics["sharpe_ratio"] = compute_sharpe(dr)
-    metrics["max_drawdown"] = compute_max_drawdown(eq)
+    metrics["max_drawdown_anchored"] = compute_max_drawdown(eq, method="anchored")
+    metrics["max_drawdown_spec"] = compute_max_drawdown(eq, method="spec")
+    metrics["drawdown_method"] = drawdown_method
+    metrics["max_drawdown"] = (
+        metrics["max_drawdown_spec"] if drawdown_method == "spec"
+        else metrics["max_drawdown_anchored"]
+    )
     metrics["win_rate"] = compute_win_rate(tl)
     metrics["profit_factor"] = compute_profit_factor(tl)
     metrics["trades_per_day"] = compute_trades_per_day(tl, num_test_days)

@@ -52,7 +52,8 @@ def _fit_train_models(train_df: pd.DataFrame, hmm_n_init: int = 10):
     return fitted
 
 
-def _evaluate_on_test(test_df: pd.DataFrame, fitted: dict, params: dict, costs: dict = None) -> dict:
+def _evaluate_on_test(test_df: pd.DataFrame, fitted: dict, params: dict, costs: dict = None,
+                      drawdown_method: str = "anchored") -> dict:
     """Engineer test features with frozen models, run signals + backtest + metrics."""
     costs = costs or {}
     test_feat, _ = engineer_features(
@@ -72,7 +73,7 @@ def _evaluate_on_test(test_df: pd.DataFrame, fitted: dict, params: dict, costs: 
         commission_rt=costs.get("commission_rt", 2.50),
     )
     num_test_days = test_df["ts_event"].dt.date.nunique()
-    metrics = compute_all_metrics(result, num_test_days)
+    metrics = compute_all_metrics(result, num_test_days, drawdown_method=drawdown_method)
     checks = check_acceptance(metrics)
     return {"features": test_feat, "result": result, "metrics": metrics, "checks": checks}
 
@@ -116,6 +117,7 @@ def run_full_pipeline(
     progress_cb: Optional[Callable[[dict], None]] = None,
     hmm_n_init_final: int = 10,
     hmm_n_init_wf: int = 3,
+    drawdown_method: str = "anchored",
 ) -> dict:
     """Full pipeline: walk-forward optimize on train, evaluate best params on test."""
     if progress_cb:
@@ -134,7 +136,16 @@ def run_full_pipeline(
 
     if progress_cb:
         progress_cb({"stage": "test", "message": "Evaluating best params on test set", "pct": 96})
-    evald = _evaluate_on_test(test_df, fitted, best_params, costs=costs)
+    evald = _evaluate_on_test(test_df, fitted, best_params, costs=costs, drawdown_method=drawdown_method)
+
+    if progress_cb:
+        progress_cb({"stage": "diagnostics", "message": "Computing overfitting diagnostics (PSR/DSR/PBO)", "pct": 98})
+    from .diagnostics import compute_diagnostics
+    diagnostics = compute_diagnostics(
+        evald["result"]["daily_returns"].values,
+        trial_sharpes_annual=wf.get("trial_sharpes"),
+        window_combo_matrix=wf.get("window_combo_matrix"),
+    )
 
     if progress_cb:
         progress_cb({"stage": "done", "message": "Pipeline complete", "pct": 100})
@@ -143,6 +154,7 @@ def run_full_pipeline(
         "symbol": symbol,
         "best_params": best_params,
         "walk_forward": wf,
+        "diagnostics": diagnostics,
         "metrics": evald["metrics"],
         "checks": evald["checks"],
         "result": evald["result"],

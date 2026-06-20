@@ -27,7 +27,8 @@ export const MetricsGrid = ({ metrics }) => {
         <KPI testid="metrics-grid-sharpe-value" label="Sharpe Ratio" cls={signClass(m.sharpe_ratio)}
           value={v(fmtNum(m.sharpe_ratio, 3))} />
         <KPI testid="metrics-grid-maxdd-value" label="Max Drawdown" cls="text-[hsl(var(--neg))]"
-          value={v(fmtPct(m.max_drawdown, 2))} />
+          value={v(fmtPct(m.max_drawdown, 2))}
+          sub={empty ? null : `anchored ${fmtPct(m.max_drawdown_anchored, 1)} \u00b7 spec ${fmtPct(m.max_drawdown_spec, 1)}`} />
         <KPI testid="metrics-grid-winrate-value" label="Win Rate"
           value={v(fmtPct(m.win_rate, 2))} />
         <KPI testid="metrics-grid-pf-value" label="Profit Factor" cls={m.profit_factor >= 1 ? "text-[hsl(var(--pos))]" : "text-[hsl(var(--neg))]"}

@@ -38,11 +38,13 @@ class BacktestRequest(BaseModel):
     toxic_reversal_threshold: float = Field(0.55, ge=0.0, le=1.0)
     max_hold_bars: int = Field(15, ge=1, le=200)
     regime_exit_enabled: bool = True
+    drawdown_method: str = Field("anchored", pattern="^(anchored|spec)$")
 
 
 class OptimizeRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
     symbol: str = "ES"
+    drawdown_method: str = Field("anchored", pattern="^(anchored|spec)$")
 
 
 # ---------------------------------------------------------------------------
@@ -88,7 +90,7 @@ async def backtest_single(req: BacktestRequest):
         "regime_exit_enabled": bool(req.regime_exit_enabled),
     }
     try:
-        payload = await run_in_threadpool(svc.run_single, req.symbol, params)
+        payload = await run_in_threadpool(svc.run_single, req.symbol, params, req.drawdown_method)
         return payload
     except Exception as exc:  # noqa: BLE001
         logger.exception("backtest_single failed")
@@ -98,11 +100,20 @@ async def backtest_single(req: BacktestRequest):
 @api_router.post("/optimize/start")
 async def optimize_start(req: OptimizeRequest):
     try:
-        job_id = svc.start_optimization(req.symbol)
+        job_id = svc.start_optimization(req.symbol, req.drawdown_method)
         return {"job_id": job_id, "status": "queued"}
     except Exception as exc:  # noqa: BLE001
         logger.exception("optimize_start failed")
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+@api_router.get("/pine-script")
+async def pine_script():
+    """Download the TradingView Pine Script port of the strategy."""
+    path = "/app/strategy_01_flowtox_regime/FLOWTOX_REGIME_01.pine"
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Pine script not found")
+    return FileResponse(path, media_type="text/plain", filename="FLOWTOX_REGIME_01.pine")
 
 
 @api_router.get("/optimize/status/{job_id}")
