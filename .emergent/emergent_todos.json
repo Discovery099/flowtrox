@@ -1,30 +1,18 @@
 [
   {
-    "content": "Install hmmlearn + requirements",
+    "content": "Validate cold-start pre-warm fix end-to-end (backend + UI)",
     "status": "completed"
   },
   {
-    "content": "hmm_model.py: GaussianHMM + filtered no-lookahead posteriors; keep GMM",
-    "status": "completed"
-  },
-  {
-    "content": "Thread regime_model through features/pipeline/validation",
-    "status": "completed"
-  },
-  {
-    "content": "Service: cache per (symbol, regime_model) + transition matrix in model_info",
-    "status": "completed"
-  },
-  {
-    "content": "Backend: regime_model request params",
-    "status": "completed"
-  },
-  {
-    "content": "Frontend: regime-model toggle + transition matrix display",
-    "status": "completed"
-  },
-  {
-    "content": "Validate (engine + API + UI) + testing agent",
+    "content": "Run comprehensive testing agent (backend + frontend), confirm cold-start test passes",
     "status": "in_progress"
+  },
+  {
+    "content": "Fix any bugs surfaced by testing agent",
+    "status": "pending"
+  },
+  {
+    "content": "Update plan.md to mark P0 phase COMPLETED",
+    "status": "pending"
   }
 ]

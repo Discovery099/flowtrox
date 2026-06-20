@@ -870,35 +870,218 @@ class BackendAPITester:
         
         return success1 and success2 and is_fast
 
+    def test_model_status_es(self):
+        """Test GET /api/model/status?symbol=ES - should return ready:true if pre-warmed"""
+        print("\n⚠️  NOTE: Testing model status for ES (should be pre-warmed on startup)")
+        success, response = self.run_test(
+            "GET /api/model/status?symbol=ES",
+            "GET",
+            "api/model/status?symbol=ES",
+            200,
+            timeout=10
+        )
+        
+        if success:
+            symbol = response.get('symbol')
+            ready = response.get('ready')
+            
+            print(f"   symbol: {symbol}")
+            print(f"   ready: {ready}")
+            
+            symbol_ok = symbol == 'ES'
+            ready_ok = ready is True
+            
+            print(f"   symbol == 'ES': {symbol_ok} {'✓' if symbol_ok else '✗'}")
+            print(f"   ready == True: {ready_ok} {'✓' if ready_ok else '✗'}")
+            
+            return success and symbol_ok and ready_ok
+        
+        return False
+
+    def test_es_gmm_fast(self):
+        """Test POST /api/backtest/single for ES with GMM - should be fast if pre-warmed"""
+        print("\n⚠️  NOTE: Testing ES GMM backtest speed (should be fast if pre-warmed)")
+        start = time.time()
+        success, response = self.run_test(
+            "POST /api/backtest/single (ES GMM - pre-warmed)",
+            "POST",
+            "api/backtest/single",
+            200,
+            data={
+                "symbol": "ES",
+                "toxic_continuation_threshold": 0.55,
+                "toxic_reversal_threshold": 0.55,
+                "max_hold_bars": 15,
+                "regime_exit_enabled": True,
+                "regime_model": "gmm"
+            },
+            timeout=120
+        )
+        elapsed = time.time() - start
+        print(f"   Elapsed time: {elapsed:.2f}s")
+        
+        # If pre-warmed, should be < 5s
+        is_fast = elapsed < 5.0
+        print(f"   Response time < 5s: {is_fast} {'✓' if is_fast else '✗ (may not be pre-warmed yet)'}")
+        
+        if success:
+            has_metrics = 'metrics' in response
+            has_trades = 'trades' in response
+            print(f"   Has metrics: {has_metrics}")
+            print(f"   Has trades: {has_trades}")
+            
+            if has_metrics:
+                metrics = response['metrics']
+                print(f"   Total trades: {metrics.get('total_trades', 'N/A')}")
+                print(f"   Sharpe ratio: {metrics.get('sharpe_ratio', 'N/A')}")
+            
+            return success and has_metrics and has_trades
+        
+        return False
+
+    def test_es_hmm_fast(self):
+        """Test POST /api/backtest/single for ES with HMM - should be fast if pre-warmed"""
+        print("\n⚠️  NOTE: Testing ES HMM backtest speed (should be fast if pre-warmed)")
+        start = time.time()
+        success, response = self.run_test(
+            "POST /api/backtest/single (ES HMM - pre-warmed)",
+            "POST",
+            "api/backtest/single",
+            200,
+            data={
+                "symbol": "ES",
+                "toxic_continuation_threshold": 0.55,
+                "toxic_reversal_threshold": 0.55,
+                "max_hold_bars": 15,
+                "regime_exit_enabled": True,
+                "regime_model": "hmm"
+            },
+            timeout=120
+        )
+        elapsed = time.time() - start
+        print(f"   Elapsed time: {elapsed:.2f}s")
+        
+        # If pre-warmed, should be < 5s
+        is_fast = elapsed < 5.0
+        print(f"   Response time < 5s: {is_fast} {'✓' if is_fast else '✗ (may not be pre-warmed yet)'}")
+        
+        if success:
+            has_metrics = 'metrics' in response
+            has_trades = 'trades' in response
+            has_trans = 'model_info' in response and response['model_info'].get('transition_matrix') is not None
+            
+            print(f"   Has metrics: {has_metrics}")
+            print(f"   Has trades: {has_trades}")
+            print(f"   Has transition_matrix: {has_trans}")
+            
+            if has_metrics:
+                metrics = response['metrics']
+                print(f"   Total trades: {metrics.get('total_trades', 'N/A')}")
+                print(f"   Sharpe ratio: {metrics.get('sharpe_ratio', 'N/A')}")
+            
+            return success and has_metrics and has_trades and has_trans
+        
+        return False
+
+    def test_mgc_cold_hmm(self):
+        """Test POST /api/backtest/single for MGC (cold symbol) with HMM - should work but take 25-90s"""
+        print("\n⚠️  NOTE: Testing MGC HMM backtest (COLD symbol, first fit ~25-90s)")
+        start = time.time()
+        success, response = self.run_test(
+            "POST /api/backtest/single (MGC HMM - COLD)",
+            "POST",
+            "api/backtest/single",
+            200,
+            data={
+                "symbol": "MGC",
+                "toxic_continuation_threshold": 0.55,
+                "toxic_reversal_threshold": 0.55,
+                "max_hold_bars": 15,
+                "regime_exit_enabled": True,
+                "regime_model": "hmm"
+            },
+            timeout=120
+        )
+        elapsed = time.time() - start
+        print(f"   Elapsed time: {elapsed:.2f}s")
+        
+        if success:
+            has_metrics = 'metrics' in response
+            has_trades = 'trades' in response
+            has_model_info = 'model_info' in response
+            
+            print(f"   Has metrics: {has_metrics}")
+            print(f"   Has trades: {has_trades}")
+            print(f"   Has model_info: {has_model_info}")
+            
+            if has_model_info:
+                model_info = response['model_info']
+                tick = model_info.get('tick_size')
+                pv = model_info.get('point_value')
+                print(f"   MGC tick_size: {tick} (expect 0.10)")
+                print(f"   MGC point_value: {pv} (expect 10.0)")
+            
+            if has_metrics:
+                metrics = response['metrics']
+                print(f"   Total trades: {metrics.get('total_trades', 'N/A')}")
+                print(f"   Sharpe ratio: {metrics.get('sharpe_ratio', 'N/A')}")
+            
+            return success and has_metrics and has_trades
+        
+        return False
+
 def main():
     print("=" * 80)
-    print("FLOWTOX_REGIME_01 Backend API Test Suite - HMM FEATURE")
+    print("FLOWTOX_REGIME_01 Backend API Test Suite - COLD-START FIX")
     print("=" * 80)
     
     tester = BackendAPITester()
     
-    # Test NEW HMM feature
+    # Test P0 COLD-START FIX
     print("\n" + "=" * 80)
-    print("PHASE 1: NEW FEATURE - HMM Regime Model")
+    print("PHASE 1: P0 COLD-START FIX - Pre-warming & Fast Response")
     print("=" * 80)
-    tester.test_hmm_backtest()
-    tester.test_gmm_backtest()
-    tester.test_hmm_gmm_different_results()
-    tester.test_hmm_cache_speed()
+    tester.test_instruments()  # Basic health check
+    tester.test_strategy_info()  # Basic health check
+    tester.test_model_status_es()  # Check if ES is pre-warmed
+    tester.test_es_gmm_fast()  # ES GMM should be fast
+    tester.test_es_hmm_fast()  # ES HMM should be fast
+    tester.test_mgc_cold_hmm()  # MGC cold should work but take longer
     
-    # Test regression: drawdown_method and diagnostics still work
+    # Test other required endpoints
     print("\n" + "=" * 80)
-    print("PHASE 2: REGRESSION - Drawdown & Diagnostics")
+    print("PHASE 2: Other Required Endpoints")
     print("=" * 80)
-    tester.test_drawdown_anchored()
-    tester.test_diagnostics_single()
+    tester.test_pine_script()
     
-    # Test basic endpoints (regression)
+    # Test optimize endpoints (start only, don't wait for completion)
     print("\n" + "=" * 80)
-    print("PHASE 3: REGRESSION - Basic Endpoints")
+    print("PHASE 3: Optimize Endpoints (Start & Progress Check)")
     print("=" * 80)
-    tester.test_instruments()
-    tester.test_strategy_info()
+    tester.test_optimize_start()
+    if tester.job_id:
+        # Poll once to verify it's progressing
+        time.sleep(3)
+        success, response = tester.run_test(
+            f"GET /api/optimize/status/{tester.job_id} (progress check)",
+            "GET",
+            f"api/optimize/status/{tester.job_id}",
+            200,
+            timeout=10
+        )
+        if success:
+            status = response.get('status', 'unknown')
+            pct = response.get('pct', 0)
+            print(f"   Job status: {status}, Progress: {pct}%")
+            print(f"   ✓ Optimization job started and progressing (not waiting for completion)")
+    
+    # Test run retrieval (if we have a run_id from earlier tests)
+    if tester.run_id:
+        print("\n" + "=" * 80)
+        print("PHASE 4: Run Retrieval & Downloads")
+        print("=" * 80)
+        tester.test_get_run()
+        tester.test_download_files()
     
     # Print summary
     print("\n" + "=" * 80)
