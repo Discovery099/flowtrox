@@ -4,15 +4,15 @@
     "status": "completed"
   },
   {
-    "content": "Refactor engine: date-based RV (instrument-agnostic sessions) + per-instrument cost threading + tick-size validation",
+    "content": "Refactor engine: date-based RV + per-instrument cost threading + tick-size validation",
     "status": "completed"
   },
   {
-    "content": "Validate all 6 instruments end-to-end (engine script + MGC API + MNQ UI)",
+    "content": "Validate all 6 instruments end-to-end",
     "status": "completed"
   },
   {
-    "content": "Focused testing_agent_v3 pass on multi-instrument (backend + frontend)",
-    "status": "in_progress"
+    "content": "Focused testing_agent_v3 pass on multi-instrument (10/10 passed)",
+    "status": "completed"
   }
 ]
