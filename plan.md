@@ -142,6 +142,16 @@ first step toward live data + paper trading.
 - HONEST CAVEAT documented in-script: TradingView's data feed differs from the
   RTH CSV, so trade-for-trade P&L won't match Python; logic + model are faithful.
 
+### Pine fixes (post-user-feedback)
+- ROOT CAUSE of "no trades / This report requires trade data": Pine v6 defaults
+  margin_long/short = 100% (no leverage). ES notional (~7556 x $50) far exceeds a
+  $100k account, so the broker emulator rejected every entry. FIX: set
+  margin_long = 0 and margin_short = 0 (futures post margin, not notional).
+- overlay = true so TradingView draws real entry/exit arrows ON the candles.
+- Regime posteriors moved to the Data Window (display.data_window) so they don't
+  flatten the price scale; added on-candle plotshape signal triangles + integer
+  qty cast + entry guard (qty >= 1).
+
 **Next (future, per user):** validate results on TradingView -> add live market
 data feed -> paper trading mode (IBKR/Tradovate bridge or TradingView alerts).
 

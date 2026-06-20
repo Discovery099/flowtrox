@@ -224,7 +224,7 @@ if validBar
 strategy(
      title              = "FLOWTOX_REGIME_01 {symbol} {regime_model.upper()}",
      shorttitle         = "FLOWTOX_{symbol}",
-     overlay            = false,
+     overlay            = true,
      pyramiding         = 0,
      initial_capital    = 100000,
      default_qty_type   = strategy.fixed,
@@ -232,6 +232,8 @@ strategy(
      commission_type    = strategy.commission.cash_per_order,
      commission_value   = {_f(commission_rt / 2.0)},   // per order; round-turn = {_f(commission_rt)}
      slippage           = 1,
+     margin_long        = 0,    // futures: post margin, not full notional (v6 defaults to 100% -> blocks entries)
+     margin_short       = 0,
      calc_on_every_tick = false,
      process_orders_on_close = true)
 """
@@ -350,12 +352,12 @@ e2 = validBar ? f_emis_s2(z0, z1, z2, z3, z4) : na
 
     sizing_logic = """
 // ---------------------------------------------------------------------------
-// 3.6  Inverse-volatility position sizing (1..maxSize)
+// 3.6  Inverse-volatility position sizing (1..maxSize, integer contracts)
 // ---------------------------------------------------------------------------
 fVol = na(harForecast) ? na : math.sqrt(math.max(harForecast, 1e-12))
 contractVolUsd = na(fVol) ? na : fVol * close * pointValue
 sizeRaw = na(contractVolUsd) or contractVolUsd <= 0 ? 1.0 : (acctVal * sigmaTgt) / contractVolUsd
-qty = math.max(1, math.min(maxSize, math.round(sizeRaw)))
+qty = int(math.max(1, math.min(maxSize, math.round(sizeRaw))))
 
 // ---------------------------------------------------------------------------
 // 3.7  Entry / exit logic (faithful to spec)
@@ -374,10 +376,10 @@ isShort = strategy.position_size < 0
 if not flat
     barsInTrade += 1
 
-if flat and longCond
+if flat and longCond and qty >= 1
     strategy.entry("L", strategy.long, qty = qty)
     barsInTrade := 0
-else if flat and shortCond
+else if flat and shortCond and qty >= 1
     strategy.entry("S", strategy.short, qty = qty)
     barsInTrade := 0
 
@@ -393,16 +395,23 @@ if isShort
         strategy.close("S", comment = timeExit ? "time" : "regime")
 
 // ---------------------------------------------------------------------------
-// PLOTS - regime posteriors + vol regime + entry markers
+// PLOTS
+//   overlay=true -> TradingView draws the actual entry/exit trade arrows on the
+//   candles automatically. The 0..1 regime posteriors are sent to the DATA
+//   WINDOW (display.data_window) so they do not flatten the price scale; the
+//   on-candle shapes below confirm where a fresh signal occurs.
 // ---------------------------------------------------------------------------
-plot(pNormal, "P(normal)",     color = color.new(color.gray, 0))
-plot(pCont,   "P(toxic-cont)", color = color.new(color.lime, 0))
-plot(pRev,    "P(toxic-rev)",  color = color.new(color.orange, 0))
-hline(tau1, "tau1", color = color.new(color.lime, 60), linestyle = hline.style_dashed)
-hline(tau2, "tau2", color = color.new(color.orange, 60), linestyle = hline.style_dashed)
-bgcolor(volRegime == 2 ? color.new(color.red, 90) : na, title = "High-vol regime (no-trade)")
-plotchar(flat and longCond,  "long sig",  "▲", location.bottom, color.lime,   size = size.tiny)
-plotchar(flat and shortCond, "short sig", "▼", location.top,    color.orange, size = size.tiny)
+showSignals = input.bool(true,  "Show signal shapes on candles", group = "Display")
+showVolBg   = input.bool(true,  "Shade high-vol (no-trade) regime", group = "Display")
+
+plot(pNormal, "P(normal)",     color = color.gray,   display = display.data_window)
+plot(pCont,   "P(toxic-cont)", color = color.lime,   display = display.data_window)
+plot(pRev,    "P(toxic-rev)",  color = color.orange, display = display.data_window)
+plot(volRegime, "Vol regime (0/1/2)", color = color.blue, display = display.data_window)
+
+bgcolor(showVolBg and volRegime == 2 ? color.new(color.red, 92) : na, title = "High-vol regime (no-trade)")
+plotshape(showSignals and flat and longCond,  "long signal",  shape.triangleup,   location.belowbar, color.new(color.lime, 0),   size = size.tiny)
+plotshape(showSignals and flat and shortCond, "short signal", shape.triangledown, location.abovebar, color.new(color.orange, 0), size = size.tiny)
 """
 
     return header + inputs + features + emissions + sizing_logic
